@@ -1,0 +1,31 @@
+{
+  "flags": {
+    "community_reports_v2": {
+      "enabled": true,
+      "rollout": 100,
+      "minBuild": {
+        "ios": 300
+      }
+    },
+    "apple_sign_in": {
+      "enabled": true,
+      "rollout": 100,
+      "minBuild": {
+        "ios": 320
+      }
+    },
+    "cloudkit_dual_write": {
+      "enabled": true,
+      "rollout": 100
+    },
+    "region_overlay": {
+      "enabled": false,
+      "rollout": 0
+    }
+  },
+  "auth": {
+    "providers": [
+      "apple"
+    ]
+  }
+}

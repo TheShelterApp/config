@@ -1,0 +1,40 @@
+{
+  "bands": [
+    {
+      "minMagnitude": 4,
+      "maxDistanceKm": 50,
+      "level": "info"
+    },
+    {
+      "minMagnitude": 5,
+      "maxDistanceKm": 150,
+      "level": "warn"
+    },
+    {
+      "minMagnitude": 6,
+      "maxDistanceKm": 400,
+      "level": "critical"
+    }
+  ],
+  "userOverrides": {
+    "minMagnitudeRange": [
+      3,
+      7
+    ],
+    "maxDistanceKmRange": [
+      25,
+      1000
+    ]
+  },
+  "liveActivity": {
+    "minMagnitude": 5.5,
+    "maxDistanceKm": 300,
+    "ttlSeconds": 3600
+  },
+  "rate": {
+    "reportUserPerCellSeconds": 600,
+    "reportUserPerHour": 6,
+    "authIpPerMinute": 30,
+    "anonIpPerMinute": 60
+  }
+}

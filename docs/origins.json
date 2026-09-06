@@ -1,0 +1,80 @@
+{
+  "ladder": [
+    {
+      "id": "cdn",
+      "serves": [
+        "mutable",
+        "immutable"
+      ],
+      "base": "https://data.theshelter.app",
+      "timeoutMs": 4000,
+      "retries": 1,
+      "breaker": {
+        "failures": 3,
+        "openSeconds": 60
+      }
+    },
+    {
+      "id": "jsdelivr",
+      "serves": [
+        "immutable"
+      ],
+      "template": "https://cdn.jsdelivr.net/gh/theshelter-app/data@{sha}/{path}",
+      "timeoutMs": 6000,
+      "retries": 1,
+      "breaker": {
+        "failures": 3,
+        "openSeconds": 120
+      }
+    },
+    {
+      "id": "raw",
+      "serves": [
+        "mutable",
+        "immutable"
+      ],
+      "template": "https://raw.githubusercontent.com/theshelter-app/data/{sha}/{path}",
+      "mutableBase": "https://raw.githubusercontent.com/theshelter-app/data/main",
+      "timeoutMs": 8000,
+      "retries": 0,
+      "breaker": {
+        "failures": 2,
+        "openSeconds": 300
+      }
+    },
+    {
+      "id": "release",
+      "serves": [
+        "immutable"
+      ],
+      "template": "https://github.com/theshelter-app/data/releases/download/{tag}/{file}",
+      "timeoutMs": 10000,
+      "retries": 0,
+      "breaker": {
+        "failures": 2,
+        "openSeconds": 600
+      }
+    }
+  ],
+  "backoff": {
+    "baseMs": 500,
+    "maxMs": 30000,
+    "factor": 2,
+    "jitter": 0.2
+  },
+  "directOrigins": {
+    "enabled": true,
+    "jitterFraction": 0.3,
+    "minIntervalSeconds": 120,
+    "providers": {
+      "usgs": {
+        "url": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson",
+        "format": "usgs-geojson"
+      },
+      "emsc": {
+        "url": "https://www.seismicportal.eu/fdsnws/event/1/query?format=json&limit=200",
+        "format": "fdsn-json"
+      }
+    }
+  }
+}

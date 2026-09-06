@@ -1,0 +1,33 @@
+{
+  "ios_data_source": "feedWithFallback",
+  "feed_disabled": false,
+  "poll": {
+    "manifestIntervalSeconds": 60,
+    "configIntervalSeconds": 900,
+    "jitterFraction": 0.2
+  },
+  "api": {
+    "base": "https://api.theshelter.app",
+    "healthPath": "/v1/health",
+    "timeoutMs": 8000
+  },
+  "data": {
+    "base": "https://data.theshelter.app",
+    "manifestPath": "/v1/manifest.json",
+    "statusPath": "/v1/status.json"
+  },
+  "staleness": {
+    "delayedAfterSeconds": 600,
+    "staleAfterSeconds": 1800
+  },
+  "reports": {
+    "coarseningCellMeters": 1000,
+    "windowSeconds": 600,
+    "shardPrecision": 3,
+    "maxQueueAgeSeconds": 86400
+  },
+  "tiles": {
+    "bundleVersion": "bundle-v1",
+    "cdnPrefix": "/tiles/"
+  }
+}
