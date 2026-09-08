@@ -8,6 +8,10 @@ on:
   push:
     branches: [dev, staging, main]
     paths: ['docs/**', 'tools/**', '.github/workflows/**']
+  schedule:
+    # Weekly freshness re-seal of the PROD policy (unattended `refresh` job below) so a stable, rarely-edited
+    # policy never silently expires to the fallback — a heartbeat well inside the 90-day max-age.
+    - cron: '23 5 * * 1'
 
 permissions:
   contents: write
@@ -53,21 +57,48 @@ jobs:
           # moderate max-age once the R2 upload (below) is wired with CI credentials.
           node tools/config-tool.mjs seal-policy docs/alerts-policy.json --env "$ENV" --version "$VERSION" --kid cfg-2026a --max-age 7776000 --out "published/$ENV/v1/"
           echo "sealed alerts-policy $ENV v$VERSION"
-      # publish (R2 then KV) is added once the R2/KV credentials are provisioned:
-      #   config bundle → config bucket + KV:      node tools/config-tool.mjs publish published/$ENV/v1/ --r2 --then-kv
-      #   alerts-policy → DATA bucket (gateway):    wrangler r2 object put "shelter-data-$ENV/alerts/policy.json" --file "published/$ENV/v1/alerts/policy.json" --remote
-      #     (the gateway reads alerts/policy.json from shelter-data-<env>; until uploaded it runs the restrictive compiled fallback)
-      #   WHEN wiring the upload, ALSO close two gaps the seal alone does not:
-      #     (a) FRESHNESS: the policy carries maxAgeSeconds (set to 90d via --max-age above) — past it a stable
-      #         policy EXPIRES to the fallback. It is now observable (status.json policy.source flips to
-      #         'fallback' with reason 'expired'), but the durable fix is a `schedule:` (cron) that re-seals +
-      #         re-uploads within a moderate window instead of relying on the long max-age.
-      #     (b) ROLLBACK: the gateway accepts any validly-signed version ≥ 1 (no persisted floor), so an older
-      #         signed policy.json can be replayed by anyone who can write the data bucket. Pin a consumer-side
-      #         version floor (persist the highest seen version in the coordinator DO/KV) before relying on kill-switches.
+      - name: Publish alerts-policy → data bucket (R2)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ENV: ${{ github.ref_name == 'main' && 'prod' || github.ref_name }}
+        run: |
+          # The gateway reads alerts/policy.json from shelter-data-<env>; this makes a push ACTIVATE it.
+          npx --yes wrangler@4 r2 object put "shelter-data-$ENV/alerts/policy.json" \
+            --file "published/$ENV/v1/alerts/policy.json" --remote --content-type application/json
+          echo "uploaded alerts-policy → shelter-data-$ENV/alerts/policy.json"
+      # The config BUNDLE publish (config bucket + KV, for config.theshelter.app) is separate (PF-07/08):
+      #   node tools/config-tool.mjs publish published/$ENV/v1/ --r2 --then-kv
+      # ROLLBACK: signed-policy replay is closed by a consumer-side version floor in the gateway (detector DO),
+      # not here — see the alerts-gateway. This job only publishes owner-approved (or scheduled-refresh) content.
       - name: Commit the published mirror (raw.githubusercontent fallback)
         run: |
           git config user.name config-bot
           git config user.email bot@users.noreply.github.com
           git add published/
           git commit -m "publish ${{ github.ref_name == 'main' && 'prod' || github.ref_name }} v$(git rev-list --count HEAD)" && git push || echo "no change to publish"
+
+  # Unattended weekly freshness: re-seal the UNCHANGED prod policy with a fresh generatedAt and re-upload it,
+  # so a stable, rarely-edited policy never silently expires to the fallback. NO `environment:` gate — the
+  # policy CONTENT is unchanged (nothing to review), only the signature timestamp is refreshed; the version is
+  # unchanged so the gateway's version floor accepts it. Does not commit the mirror (R2 is the source of truth).
+  refresh:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v5
+        with: { node-version: '22' }
+      - name: Re-seal + re-upload the prod alerts-policy (freshness only)
+        env:
+          CONFIG_ED25519_PRIVATE: ${{ secrets.CONFIG_ED25519_PRIVATE }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          VERSION=$(git rev-list --count HEAD)
+          node tools/config-tool.mjs validate docs/
+          node tools/config-tool.mjs seal-policy docs/alerts-policy.json --env prod --version "$VERSION" --kid cfg-2026a --max-age 7776000 --out published/prod/v1/
+          npx --yes wrangler@4 r2 object put "shelter-data-prod/alerts/policy.json" \
+            --file "published/prod/v1/alerts/policy.json" --remote --content-type application/json
+          echo "refreshed prod alerts-policy (v$VERSION, fresh generatedAt)"
