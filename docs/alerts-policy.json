@@ -1,0 +1,31 @@
+{
+  "schema": "alerts-policy/1",
+  "version": 7,
+  "publishedAt": "2026-09-08T00:00:00.000Z",
+  "globalMinMag": 4.0,
+  "maxAlertAgeSec": 21600,
+  "radiusByMagnitude": [
+    [4.0, 100],
+    [5.0, 200],
+    [5.5, 300],
+    [6.0, 600],
+    [7.0, 1000],
+    [8.0, 1500]
+  ],
+  "cellMarginKm": 28,
+  "tiers": [
+    { "id": 0, "minMag": 6.0, "maxKm": 300, "interruption": "time-sensitive", "sound": "alert_strong.caf", "relevance": 1.0, "liveActivity": true, "ignoreQuietHours": true },
+    { "id": 1, "minMag": 5.5, "maxKm": 600, "interruption": "time-sensitive", "sound": "alert_strong.caf", "relevance": 0.8, "liveActivity": true, "ignoreQuietHours": false },
+    { "id": 2, "minMag": 0.0, "maxKm": 99999, "interruption": "active", "sound": "default", "relevance": 0.4, "liveActivity": false, "ignoreQuietHours": false }
+  ],
+  "quietHoursOverrides": [
+    { "minMag": 6.0, "maxKm": 1000 },
+    { "minMag": 5.5, "maxKm": 300 }
+  ],
+  "revision": { "magDelta": 0.3, "tsunamiFlip": true },
+  "liveActivity": { "minOs": "17.2", "maxUpdatesPerActivity": 12, "endAfterQuietSec": 7200, "maxLifetimeSec": 21600, "staleAfterSec": 1800, "aftershockRadiusKm": 300 },
+  "fanout": { "runner": "worker", "chunkSize": 500, "leaseMs": 60000, "criticalLaneMax": 40, "deliveryLedger": "tier01" },
+  "apns": { "activeKid": "ZA4MXX4393", "topic": "app.theshelter.ios.app" },
+  "killSwitches": { "fanout": false, "liveActivities": false, "tier2": false },
+  "flags": { "testPush": false, "watchStandalone": false, "criticalAlerts": false }
+}

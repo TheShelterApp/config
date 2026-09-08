@@ -41,8 +41,25 @@ jobs:
           VERSION=$(git rev-list --count HEAD)
           node tools/config-tool.mjs seal docs/ --env "$ENV" --version "$VERSION" --git-sha "$GITHUB_SHA" --kid cfg-2026a --out "published/$ENV/v1/"
           echo "sealed $ENV v$VERSION"
-      # publish (R2 then KV) is added once the config Worker's R2/KV credentials are provisioned:
-      #   node tools/config-tool.mjs publish published/$ENV/v1/ --r2 --then-kv
+      - name: Seal alerts-policy (standalone signed doc the alerts-gateway reads from the data bucket)
+        env:
+          CONFIG_ED25519_PRIVATE: ${{ secrets.CONFIG_ED25519_PRIVATE }}
+          ENV: ${{ github.ref_name == 'main' && 'prod' || github.ref_name }}
+        run: |
+          VERSION=$(git rev-list --count HEAD)
+          node tools/config-tool.mjs seal-policy docs/alerts-policy.json --env "$ENV" --version "$VERSION" --kid cfg-2026a --out "published/$ENV/v1/"
+          echo "sealed alerts-policy $ENV v$VERSION"
+      # publish (R2 then KV) is added once the R2/KV credentials are provisioned:
+      #   config bundle → config bucket + KV:      node tools/config-tool.mjs publish published/$ENV/v1/ --r2 --then-kv
+      #   alerts-policy → DATA bucket (gateway):    wrangler r2 object put "shelter-data-$ENV/alerts/policy.json" --file "published/$ENV/v1/alerts/policy.json" --remote
+      #     (the gateway reads alerts/policy.json from shelter-data-<env>; until uploaded it runs the restrictive compiled fallback)
+      #   WHEN wiring the upload, ALSO close two gaps the seal alone does not:
+      #     (a) FRESHNESS: the policy carries maxAgeSeconds (default 7d) — a stable policy would silently EXPIRE
+      #         to the fallback if no push lands in that window. Add a `schedule:` (cron) that re-seals + re-uploads
+      #         within the window, and/or pass a longer `--max-age` to the seal-policy step above.
+      #     (b) ROLLBACK: the gateway accepts any validly-signed version ≥ 1 (no persisted floor), so an older
+      #         signed policy.json can be replayed by anyone who can write the data bucket. Pin a consumer-side
+      #         version floor (persist the highest seen version in the coordinator DO/KV) before relying on kill-switches.
       - name: Commit the published mirror (raw.githubusercontent fallback)
         run: |
           git config user.name config-bot

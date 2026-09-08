@@ -224,7 +224,7 @@ var init_src = __esm({
 
 // packages/config-tool/src/cli.ts
 init_src();
-import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 // packages/domain/src/geo/cell.ts
@@ -19273,6 +19273,49 @@ function crossDocErrors(bundle) {
   return errors;
 }
 
+// packages/alerts-core/src/policy.ts
+var interruption = external_exports.enum(["passive", "active", "time-sensitive", "critical"]);
+var tierSchema = external_exports.strictObject({
+  id: external_exports.int().min(0),
+  minMag: external_exports.number(),
+  maxKm: external_exports.number().positive(),
+  interruption,
+  sound: external_exports.string(),
+  relevance: external_exports.number().min(0).max(1),
+  liveActivity: external_exports.boolean(),
+  ignoreQuietHours: external_exports.boolean()
+});
+var alertPolicySchema = external_exports.strictObject({
+  schema: external_exports.literal("alerts-policy/1"),
+  version: external_exports.int().min(1),
+  publishedAt: external_exports.iso.datetime(),
+  globalMinMag: external_exports.number(),
+  maxAlertAgeSec: external_exports.int().min(1),
+  radiusByMagnitude: external_exports.array(external_exports.tuple([external_exports.number(), external_exports.number()])).min(1),
+  cellMarginKm: external_exports.number().min(0),
+  tiers: external_exports.array(tierSchema).min(1),
+  quietHoursOverrides: external_exports.array(external_exports.strictObject({ minMag: external_exports.number(), maxKm: external_exports.number() })),
+  revision: external_exports.strictObject({ magDelta: external_exports.number().min(0), tsunamiFlip: external_exports.boolean() }),
+  liveActivity: external_exports.strictObject({
+    minOs: external_exports.string(),
+    maxUpdatesPerActivity: external_exports.int().min(0),
+    endAfterQuietSec: external_exports.int().min(0),
+    maxLifetimeSec: external_exports.int().min(0),
+    staleAfterSec: external_exports.int().min(0),
+    aftershockRadiusKm: external_exports.number().min(0)
+  }),
+  fanout: external_exports.strictObject({
+    runner: external_exports.enum(["actions", "worker", "queues"]),
+    chunkSize: external_exports.int().min(1),
+    leaseMs: external_exports.int().min(1),
+    criticalLaneMax: external_exports.int().min(1),
+    deliveryLedger: external_exports.string()
+  }),
+  apns: external_exports.strictObject({ activeKid: external_exports.string(), topic: external_exports.string() }),
+  killSwitches: external_exports.strictObject({ fanout: external_exports.boolean(), liveActivities: external_exports.boolean(), tier2: external_exports.boolean() }),
+  flags: external_exports.strictObject({ testPush: external_exports.boolean(), watchStandalone: external_exports.boolean(), criticalAlerts: external_exports.boolean() })
+});
+
 // packages/config-tool/src/index.ts
 var SCHEMA_URL = "https://config.theshelter.app/schemas/bundle.v1.json";
 function validate2(docs) {
@@ -19322,6 +19365,35 @@ async function verifyBundle(envelope, opts) {
   if (opts.expectVersion !== void 0 && doc.version < opts.expectVersion) throw new EnvelopeError("Rollback", `served version ${doc.version} < expected ${opts.expectVersion}`);
   return parseBundle(doc);
 }
+function policySemanticErrors(p) {
+  const e = [];
+  if (!Number.isFinite(p.globalMinMag) || p.globalMinMag < 0 || p.globalMinMag > 10) e.push(`globalMinMag ${p.globalMinMag} is out of the sane range [0,10] (a common typo is 40 for 4.0)`);
+  const mags = p.radiusByMagnitude.map((t) => t[0]);
+  for (let i = 1; i < mags.length; i++) if (!(mags[i] > mags[i - 1])) e.push(`radiusByMagnitude magnitudes must be strictly ascending (got ${mags.join(", ")})`);
+  for (const [m, r] of p.radiusByMagnitude) if (!(r > 0)) e.push(`radiusByMagnitude radius for mag ${m} must be > 0 (got ${r})`);
+  for (let i = 1; i < p.tiers.length; i++) if (p.tiers[i].maxKm < p.tiers[i - 1].maxKm) e.push(`tiers must be ordered nearest-first (non-decreasing maxKm) \u2014 tier ${p.tiers[i].id} maxKm ${p.tiers[i].maxKm} < previous ${p.tiers[i - 1].maxKm}`);
+  if (!/^[A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z0-9.-]+$/.test(p.apns.topic)) e.push(`apns.topic "${p.apns.topic}" is not a valid reverse-DNS bundle id`);
+  if (!/^[A-Za-z0-9]{6,}$/.test(p.apns.activeKid)) e.push(`apns.activeKid "${p.apns.activeKid}" is not a valid APNs key id`);
+  return e;
+}
+function validatePolicy(policy) {
+  const parsed = alertPolicySchema.safeParse(policy);
+  if (!parsed.success) return { errors: parsed.error.issues.map((i) => `alerts-policy: ${i.path.join(".")} ${i.message}`), value: null };
+  const errors = policySemanticErrors(parsed.data).map((m) => `alerts-policy: ${m}`);
+  return { errors, value: errors.length ? null : parsed.data };
+}
+async function sealPolicy(input2) {
+  const { errors, value } = validatePolicy(input2.policy);
+  if (errors.length > 0 || !value) throw new Error(`alerts-policy invalid:
+${errors.join("\n")}`);
+  if (input2.published) {
+    if (input2.header.version <= input2.published.version) throw new Error(`version ${input2.header.version} must exceed the published ${input2.published.version}`);
+    if (Date.parse(input2.header.generatedAt) < Date.parse(input2.published.generatedAt)) throw new Error("generatedAt is earlier than the published policy (clock skew)");
+  }
+  const doc = { doc: "alerts-policy", env: input2.header.env, version: input2.header.version, generatedAt: input2.header.generatedAt, maxAgeSeconds: input2.header.maxAgeSeconds, policy: value };
+  const envelope = await seal(input2.signer, doc);
+  return { envelope, version: input2.header.version };
+}
 async function keygen(kid) {
   const { generateEd25519KeyMaterial: generateEd25519KeyMaterial2 } = await Promise.resolve().then(() => (init_src(), src_exports));
   const m = await generateEd25519KeyMaterial2(kid);
@@ -19337,7 +19409,10 @@ var readDocs = (dir) => Object.fromEntries(DOC_NAMES.map((n) => [n, JSON.parse(r
 async function main() {
   const [cmd, ...args] = process.argv.slice(2);
   if (cmd === "validate") {
-    const { errors } = validate2(readDocs(args[0] ?? "docs"));
+    const dir = args[0] ?? "docs";
+    const { errors } = validate2(readDocs(dir));
+    const policyPath = join(dir, "alerts-policy.json");
+    if (existsSync(policyPath)) errors.push(...validatePolicy(JSON.parse(readFileSync(policyPath, "utf8"))).errors);
     if (errors.length) {
       console.error(errors.join("\n"));
       process.exit(1);
@@ -19361,6 +19436,36 @@ async function main() {
     writeFileSync(join(out, "bundle.json"), JSON.stringify(res.bundle));
     for (const name of DOC_NAMES) writeFileSync(join(out, `${name}.json`), JSON.stringify(res.perDoc[name]));
     console.log(`sealed v${res.version} \u2192 ${out}`);
+  } else if (cmd === "seal-policy") {
+    const opt = (k) => {
+      const i = args.indexOf(`--${k}`);
+      return i >= 0 ? args[i + 1] : void 0;
+    };
+    const key = process.env.CONFIG_ED25519_PRIVATE;
+    if (!key) {
+      console.error("CONFIG_ED25519_PRIVATE is required");
+      process.exit(1);
+    }
+    const policyFile = args[0];
+    if (!policyFile || policyFile.startsWith("--")) {
+      console.error("usage: config-tool seal-policy <policy.json> --env <dev|staging|prod> --version <n> [--kid cfg-2026a] [--max-age <sec>] --out <dir>");
+      process.exit(2);
+    }
+    const header = { env: opt("env"), version: Number(opt("version")), generatedAt: (/* @__PURE__ */ new Date()).toISOString(), maxAgeSeconds: opt("max-age") ? Number(opt("max-age")) : 604800 };
+    if (!["dev", "staging", "prod"].includes(header.env)) {
+      console.error("--env must be dev|staging|prod");
+      process.exit(1);
+    }
+    if (!Number.isInteger(header.version) || header.version < 1) {
+      console.error("--version must be a positive integer");
+      process.exit(1);
+    }
+    const signer = await Ed25519Signer.fromPkcs8(opt("kid") ?? "cfg-2026a", "config", decodePkcs8(key));
+    const { envelope, version: version2 } = await sealPolicy({ policy: JSON.parse(readFileSync(policyFile, "utf8")), header, signer });
+    const out = opt("out") ?? "published/v1";
+    mkdirSync(join(out, "alerts"), { recursive: true });
+    writeFileSync(join(out, "alerts", "policy.json"), JSON.stringify(envelope));
+    console.log(`sealed alerts-policy v${version2} (${header.env}) \u2192 ${join(out, "alerts", "policy.json")}`);
   } else if (cmd === "verify") {
     const opt = (k) => {
       const i = args.indexOf(`--${k}`);
@@ -19373,7 +19478,7 @@ async function main() {
   } else if (cmd === "keygen") {
     console.log(JSON.stringify(await keygen(args[0] ?? "cfg-2026a"), null, 2));
   } else {
-    console.error("usage: config-tool <validate|seal|verify|keygen> \u2026");
+    console.error("usage: config-tool <validate|seal|seal-policy|verify|keygen> \u2026");
     process.exit(2);
   }
 }
