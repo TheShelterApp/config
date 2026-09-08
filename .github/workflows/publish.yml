@@ -47,16 +47,21 @@ jobs:
           ENV: ${{ github.ref_name == 'main' && 'prod' || github.ref_name }}
         run: |
           VERSION=$(git rev-list --count HEAD)
-          node tools/config-tool.mjs seal-policy docs/alerts-policy.json --env "$ENV" --version "$VERSION" --kid cfg-2026a --out "published/$ENV/v1/"
+          # --max-age 90d: a stable policy must not silently expire to the fallback between infrequent edits
+          # (there is no cron re-seal yet). An expiry is now observable — the gateway surfaces the effective
+          # policy in status.json (source:signed|fallback + reason). Replace with a scheduled re-seal + a
+          # moderate max-age once the R2 upload (below) is wired with CI credentials.
+          node tools/config-tool.mjs seal-policy docs/alerts-policy.json --env "$ENV" --version "$VERSION" --kid cfg-2026a --max-age 7776000 --out "published/$ENV/v1/"
           echo "sealed alerts-policy $ENV v$VERSION"
       # publish (R2 then KV) is added once the R2/KV credentials are provisioned:
       #   config bundle → config bucket + KV:      node tools/config-tool.mjs publish published/$ENV/v1/ --r2 --then-kv
       #   alerts-policy → DATA bucket (gateway):    wrangler r2 object put "shelter-data-$ENV/alerts/policy.json" --file "published/$ENV/v1/alerts/policy.json" --remote
       #     (the gateway reads alerts/policy.json from shelter-data-<env>; until uploaded it runs the restrictive compiled fallback)
       #   WHEN wiring the upload, ALSO close two gaps the seal alone does not:
-      #     (a) FRESHNESS: the policy carries maxAgeSeconds (default 7d) — a stable policy would silently EXPIRE
-      #         to the fallback if no push lands in that window. Add a `schedule:` (cron) that re-seals + re-uploads
-      #         within the window, and/or pass a longer `--max-age` to the seal-policy step above.
+      #     (a) FRESHNESS: the policy carries maxAgeSeconds (set to 90d via --max-age above) — past it a stable
+      #         policy EXPIRES to the fallback. It is now observable (status.json policy.source flips to
+      #         'fallback' with reason 'expired'), but the durable fix is a `schedule:` (cron) that re-seals +
+      #         re-uploads within a moderate window instead of relying on the long max-age.
       #     (b) ROLLBACK: the gateway accepts any validly-signed version ≥ 1 (no persisted floor), so an older
       #         signed policy.json can be replayed by anyone who can write the data bucket. Pin a consumer-side
       #         version floor (persist the highest seen version in the coordinator DO/KV) before relying on kill-switches.
