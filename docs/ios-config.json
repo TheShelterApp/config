@@ -7,12 +7,12 @@
     "jitterFraction": 0.2
   },
   "api": {
-    "base": "https://api.theshelter.app",
+    "base": "https://api-dev.theshelter.app",
     "healthPath": "/v1/health",
     "timeoutMs": 8000
   },
   "data": {
-    "base": "https://data.theshelter.app",
+    "base": "https://data-dev.theshelter.app",
     "manifestPath": "/v1/manifest.json",
     "statusPath": "/v1/status.json"
   },

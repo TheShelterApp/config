@@ -6,7 +6,7 @@
         "mutable",
         "immutable"
       ],
-      "base": "https://data.theshelter.app",
+      "base": "https://data-dev.theshelter.app",
       "timeoutMs": 4000,
       "retries": 1,
       "breaker": {
@@ -19,7 +19,7 @@
       "serves": [
         "immutable"
       ],
-      "template": "https://cdn.jsdelivr.net/gh/theshelter-app/data@{sha}/{path}",
+      "template": "https://cdn.jsdelivr.net/gh/TheShelterApp/earthquakes-feed@{sha}/{path}",
       "timeoutMs": 6000,
       "retries": 1,
       "breaker": {
@@ -33,8 +33,8 @@
         "mutable",
         "immutable"
       ],
-      "template": "https://raw.githubusercontent.com/theshelter-app/data/{sha}/{path}",
-      "mutableBase": "https://raw.githubusercontent.com/theshelter-app/data/main",
+      "template": "https://raw.githubusercontent.com/TheShelterApp/earthquakes-feed/{sha}/{path}",
+      "mutableBase": "https://raw.githubusercontent.com/TheShelterApp/earthquakes-feed/data",
       "timeoutMs": 8000,
       "retries": 0,
       "breaker": {
@@ -47,7 +47,7 @@
       "serves": [
         "immutable"
       ],
-      "template": "https://github.com/theshelter-app/data/releases/download/{tag}/{file}",
+      "template": "https://github.com/TheShelterApp/earthquakes-feed/releases/download/{tag}/{file}",
       "timeoutMs": 10000,
       "retries": 0,
       "breaker": {
