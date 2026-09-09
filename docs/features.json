@@ -14,10 +14,6 @@
         "ios": 320
       }
     },
-    "cloudkit_dual_write": {
-      "enabled": true,
-      "rollout": 100
-    },
     "region_overlay": {
       "enabled": false,
       "rollout": 0
