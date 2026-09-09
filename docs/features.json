@@ -4,14 +4,14 @@
       "enabled": true,
       "rollout": 100,
       "minBuild": {
-        "ios": 300
+        "ios": 1
       }
     },
     "apple_sign_in": {
       "enabled": true,
       "rollout": 100,
       "minBuild": {
-        "ios": 320
+        "ios": 1
       }
     },
     "region_overlay": {
