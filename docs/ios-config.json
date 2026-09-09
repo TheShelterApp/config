@@ -1,5 +1,5 @@
 {
-  "ios_data_source": "feedWithFallback",
+  "ios_data_source": "feed",
   "feed_disabled": false,
   "poll": {
     "manifestIntervalSeconds": 60,

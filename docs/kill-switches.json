@@ -9,7 +9,7 @@
     "emsc"
   ],
   "min_supported_build": {
-    "ios": 312,
+    "ios": 1,
     "watchos": 40
   },
   "notice": null

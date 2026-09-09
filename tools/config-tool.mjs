@@ -19428,7 +19428,7 @@ async function main() {
       console.error("CONFIG_ED25519_PRIVATE is required");
       process.exit(1);
     }
-    const header = { env: opt("env"), version: Number(opt("version")), generatedAt: (/* @__PURE__ */ new Date()).toISOString(), maxAgeSeconds: 604800, gitSha: opt("git-sha") ?? "0".repeat(40) };
+    const header = { env: opt("env"), version: Number(opt("version")), generatedAt: (/* @__PURE__ */ new Date()).toISOString(), maxAgeSeconds: 2592000, gitSha: opt("git-sha") ?? "0".repeat(40) };
     const signer = await Ed25519Signer.fromPkcs8(opt("kid") ?? "cfg-2026a", "config", decodePkcs8(key));
     const res = await sealBundle({ docs: readDocs(args[0] ?? "docs"), header, signer });
     const out = opt("out") ?? "published/v1";
