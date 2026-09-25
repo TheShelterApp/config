@@ -224,8 +224,9 @@ var init_src = __esm({
 
 // packages/config-tool/src/cli.ts
 init_src();
-import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { spawn } from "node:child_process";
+import { existsSync, readFileSync as readFileSync2, mkdirSync, writeFileSync } from "node:fs";
+import { join as join2 } from "node:path";
 
 // packages/domain/src/geo/cell.ts
 var CELL_METERS = 1e3;
@@ -237,14 +238,41 @@ init_src();
 async function seal(signer, doc) {
   return sealJson(signer, doc);
 }
+var MAX_CLOCK_SKEW_MS = 10 * 60 * 1e3;
+var ABSOLUTE_MAX_AGE_MS = 180 * 86400 * 1e3;
 async function open(verifier, envelope, o) {
   const doc = decodeJsonPayload(await openBytes(verifier, envelope));
   if (doc.doc !== o.expectDoc || doc.env !== o.expectEnv) throw new EnvelopeError("WrongDoc");
   if (doc.version < o.minVersion) throw new EnvelopeError("Rollback");
-  const maxAgeSeconds = o.maxAgeOverrideSeconds ?? doc.maxAgeSeconds;
-  if (o.now - Date.parse(doc.generatedAt) > maxAgeSeconds * 1e3) throw new EnvelopeError("Expired");
+  const generatedAt = Date.parse(doc.generatedAt);
+  if (Number.isNaN(generatedAt)) throw new EnvelopeError("Expired");
+  if (generatedAt > o.now + MAX_CLOCK_SKEW_MS) throw new EnvelopeError("Expired");
+  const claimed = Number(o.maxAgeOverrideSeconds ?? doc.maxAgeSeconds);
+  const maxAgeMs = Math.min(Number.isFinite(claimed) && claimed > 0 ? claimed * 1e3 : ABSOLUTE_MAX_AGE_MS, ABSOLUTE_MAX_AGE_MS);
+  if (o.now - generatedAt > maxAgeMs) throw new EnvelopeError("Expired");
   return doc;
 }
+
+// packages/domain/src/keyring.ts
+init_src();
+function rawFromBase64(b64) {
+  return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+}
+async function verifierFor(purpose, keys) {
+  const raw = {};
+  for (const k of keys) raw[k.kid] = rawFromBase64(k.publicKeyBase64);
+  return Ed25519Verifier.fromRawPublicKeys(purpose, raw);
+}
+var FEED_2026A = { kid: "feed-2026a", publicKeyBase64: "d3VM4u2RaSbJ7BC3HPI8PX9XCS7xTlUHA5hRKID9hKo=" };
+var FEED_2026B = { kid: "feed-2026b", publicKeyBase64: "jtbSF9Z83KtAsLead7vqPrk/KUdptOQWjALu4o9RqNs=" };
+var CFG_2026A = { kid: "cfg-2026a", publicKeyBase64: "JFJqkUuyDkKVkZupAwfSRc+X2Nn82I3kkSxsxlApyJA=" };
+var CFG_2026B = { kid: "cfg-2026b", publicKeyBase64: "wb9HVx7ZRkU2VVO1xM9KA/AXjsIQHU3S2H9GIdFh0/g=" };
+var CFG_2026C = { kid: "cfg-2026c", publicKeyBase64: "5csqtamD1ZAFR5XneSDjPQ12sRGbdSGRnuDuB4sjqYA=" };
+var EMBEDDED_KEYRING = {
+  dev: { feed: [FEED_2026A, FEED_2026B], config: [CFG_2026A, CFG_2026B, CFG_2026C] },
+  staging: { feed: [FEED_2026A, FEED_2026B], config: [CFG_2026A, CFG_2026B, CFG_2026C] },
+  prod: { feed: [FEED_2026A, FEED_2026B], config: [CFG_2026A, CFG_2026C, CFG_2026B] }
+};
 
 // node_modules/.pnpm/zod@4.5.4/node_modules/zod/v4/classic/external.js
 var external_exports = {};
@@ -19165,26 +19193,42 @@ var iosConfigShape = {
   data: external_exports.strictObject({ base: external_exports.url(), manifestPath: external_exports.string(), statusPath: external_exports.string() }),
   staleness: external_exports.strictObject({ delayedAfterSeconds: external_exports.int().min(1), staleAfterSeconds: external_exports.int().min(1) }),
   reports: external_exports.strictObject({ coarseningCellMeters: external_exports.int().min(1), windowSeconds: external_exports.int().min(1), shardPrecision: external_exports.int().min(1).max(12), maxQueueAgeSeconds: external_exports.int().min(1) }),
-  tiles: external_exports.strictObject({ bundleVersion: external_exports.string(), cdnPrefix: external_exports.string() })
+  tiles: external_exports.strictObject({ bundleVersion: external_exports.string(), cdnPrefix: external_exports.string() }),
+  /**
+   * The offline region-tiles SQLite bundle pointer (plan D-11 / WP-3.5, contract C2): the same four facts as
+   * `region-tiles/regions-db.json`, moved into the SIGNED doc so the download is pinned by a verified sha256.
+   * `size_bytes` and `sha256` (lowercase hex) are of the downloaded (gzipped) file. Optional: the app falls back
+   * to its compiled manifest when an env has not published it yet.
+   */
+  regions_db: external_exports.strictObject({
+    version: external_exports.string().regex(/^[0-9A-Za-z][0-9A-Za-z._-]{0,63}$/),
+    url: external_exports.url({ protocol: /^https$/ }).max(512),
+    size_bytes: external_exports.int().min(1).max(5e8),
+    sha256: external_exports.string().regex(/^[0-9a-f]{64}$/)
+  }).optional()
 };
 var iosConfigSchema = external_exports.strictObject(iosConfigShape);
 
 // packages/domain/src/config/kill-switches.ts
 var DIRECT_ORIGIN_PROVIDERS = ["usgs", "emsc"];
 var COMMUNITY_WRITE_MODES = ["normal", "readOnly", "disabled"];
+var NOTICE_SEVERITIES = ["info", "warning"];
+var localizedText = (max) => external_exports.strictObject({ en: external_exports.string().min(1).max(max), ru: external_exports.string().min(1).max(max).optional() });
 var noticeSchema = external_exports.strictObject({
-  id: external_exports.string().max(64),
-  level: external_exports.enum(["info", "warn", "critical"]),
-  text: external_exports.object({ en: external_exports.string().max(280) }).catchall(external_exports.string().max(280)),
-  until: external_exports.iso.datetime().optional()
+  id: external_exports.string().regex(/^[A-Za-z0-9._-]{1,64}$/),
+  severity: external_exports.enum(NOTICE_SEVERITIES),
+  title: localizedText(80),
+  body: localizedText(500),
+  url: external_exports.url({ protocol: /^https$/ }).max(512).optional(),
+  until_epoch_sec: external_exports.int().min(0).optional()
 });
 var killSwitchesShape = {
   feed_disabled: external_exports.boolean(),
   community_write_mode: external_exports.enum(COMMUNITY_WRITE_MODES),
   usgs_submit: external_exports.boolean(),
-  live_activities: external_exports.boolean(),
-  push_alerts: external_exports.boolean(),
   direct_origins_provider_allowlist: external_exports.array(external_exports.enum(DIRECT_ORIGIN_PROVIDERS)).refine((a) => new Set(a).size === a.length, { message: "must be unique" }),
+  /** `ios` is a CFBundleVersion floor (the build number = git commit count, plan D-16/WP-2.9): an installed build
+   *  below it shows the blocking "Update required" screen. */
   min_supported_build: external_exports.strictObject({ ios: external_exports.int().min(1), watchos: external_exports.int().min(1) }),
   notice: external_exports.union([external_exports.null(), noticeSchema]).optional()
 };
@@ -19275,6 +19319,49 @@ function crossDocErrors(bundle) {
 
 // packages/alerts-core/src/policy.ts
 var interruption = external_exports.enum(["passive", "active", "time-sensitive", "critical"]);
+function buildPolicySchema(strict) {
+  const obj = strict ? external_exports.strictObject : external_exports.object;
+  const tier = obj({
+    id: external_exports.int().min(0),
+    minMag: external_exports.number(),
+    maxKm: external_exports.number().positive(),
+    interruption,
+    sound: external_exports.string(),
+    relevance: external_exports.number().min(0).max(1),
+    liveActivity: external_exports.boolean(),
+    ignoreQuietHours: external_exports.boolean()
+  });
+  return obj({
+    schema: external_exports.literal("alerts-policy/1"),
+    version: external_exports.int().min(1),
+    publishedAt: external_exports.iso.datetime(),
+    globalMinMag: external_exports.number(),
+    maxAlertAgeSec: external_exports.int().min(1),
+    radiusByMagnitude: external_exports.array(external_exports.tuple([external_exports.number(), external_exports.number()])).min(1),
+    cellMarginKm: external_exports.number().min(0),
+    tiers: external_exports.array(tier).min(1),
+    quietHoursOverrides: external_exports.array(obj({ minMag: external_exports.number(), maxKm: external_exports.number() })),
+    revision: obj({ magDelta: external_exports.number().min(0), tsunamiFlip: external_exports.boolean() }),
+    liveActivity: obj({
+      minOs: external_exports.string(),
+      maxUpdatesPerActivity: external_exports.int().min(0),
+      endAfterQuietSec: external_exports.int().min(0),
+      maxLifetimeSec: external_exports.int().min(0),
+      staleAfterSec: external_exports.int().min(0),
+      aftershockRadiusKm: external_exports.number().min(0)
+    }),
+    fanout: obj({
+      runner: external_exports.enum(["actions", "worker", "queues"]),
+      chunkSize: external_exports.int().min(1),
+      leaseMs: external_exports.int().min(1),
+      criticalLaneMax: external_exports.int().min(1),
+      deliveryLedger: external_exports.string()
+    }),
+    apns: obj({ activeKid: external_exports.string(), topic: external_exports.string() }),
+    killSwitches: obj({ fanout: external_exports.boolean(), liveActivities: external_exports.boolean(), tier2: external_exports.boolean() }),
+    flags: obj({ testPush: external_exports.boolean(), watchStandalone: external_exports.boolean(), criticalAlerts: external_exports.boolean() })
+  });
+}
 var tierSchema = external_exports.strictObject({
   id: external_exports.int().min(0),
   minMag: external_exports.number(),
@@ -19285,41 +19372,23 @@ var tierSchema = external_exports.strictObject({
   liveActivity: external_exports.boolean(),
   ignoreQuietHours: external_exports.boolean()
 });
-var alertPolicySchema = external_exports.strictObject({
-  schema: external_exports.literal("alerts-policy/1"),
-  version: external_exports.int().min(1),
-  publishedAt: external_exports.iso.datetime(),
-  globalMinMag: external_exports.number(),
-  maxAlertAgeSec: external_exports.int().min(1),
-  radiusByMagnitude: external_exports.array(external_exports.tuple([external_exports.number(), external_exports.number()])).min(1),
-  cellMarginKm: external_exports.number().min(0),
-  tiers: external_exports.array(tierSchema).min(1),
-  quietHoursOverrides: external_exports.array(external_exports.strictObject({ minMag: external_exports.number(), maxKm: external_exports.number() })),
-  revision: external_exports.strictObject({ magDelta: external_exports.number().min(0), tsunamiFlip: external_exports.boolean() }),
-  liveActivity: external_exports.strictObject({
-    minOs: external_exports.string(),
-    maxUpdatesPerActivity: external_exports.int().min(0),
-    endAfterQuietSec: external_exports.int().min(0),
-    maxLifetimeSec: external_exports.int().min(0),
-    staleAfterSec: external_exports.int().min(0),
-    aftershockRadiusKm: external_exports.number().min(0)
-  }),
-  fanout: external_exports.strictObject({
-    runner: external_exports.enum(["actions", "worker", "queues"]),
-    chunkSize: external_exports.int().min(1),
-    leaseMs: external_exports.int().min(1),
-    criticalLaneMax: external_exports.int().min(1),
-    deliveryLedger: external_exports.string()
-  }),
-  apns: external_exports.strictObject({ activeKid: external_exports.string(), topic: external_exports.string() }),
-  killSwitches: external_exports.strictObject({ fanout: external_exports.boolean(), liveActivities: external_exports.boolean(), tier2: external_exports.boolean() }),
-  flags: external_exports.strictObject({ testPush: external_exports.boolean(), watchStandalone: external_exports.boolean(), criticalAlerts: external_exports.boolean() })
-});
+var alertPolicySchema = buildPolicySchema(true);
+var alertPolicyReadSchema = buildPolicySchema(false);
 
 // packages/config-tool/src/index.ts
 var SCHEMA_URL = "https://config.theshelter.app/schemas/bundle.v1.json";
+var RETIRED_KILL_SWITCHES = {
+  push_alerts: "the signed alerts policy killSwitches.fanout (docs/alerts-policy.json)",
+  live_activities: "the signed alerts policy killSwitches.liveActivities (docs/alerts-policy.json)"
+};
 function validate2(docs) {
   const errors = [];
+  const ks = docs["kill-switches"];
+  if (ks && typeof ks === "object") {
+    for (const [field, replacement] of Object.entries(RETIRED_KILL_SWITCHES)) {
+      if (field in ks) errors.push(`kill-switches: ${field} was retired (plan D-17) \u2014 delete it; the push authority is ${replacement}`);
+    }
+  }
   for (const name of DOC_NAMES) {
     const res = docContentSchemas[name].safeParse(docs[name]);
     if (!res.success) for (const issue2 of res.error.issues) errors.push(`${name}: ${issue2.path.join(".")} ${issue2.message}`);
@@ -19404,15 +19473,139 @@ ${m.privateKeyPkcs8Base64.match(/.{1,64}/g).join("\n")}
   return { kid: m.kid, privatePkcs8Pem: pem, publicKeyBase64: m.publicKeyRawBase64 };
 }
 
+// packages/config-tool/src/publish.ts
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+var PUBLISH_DOCS = ["bundle", ...DOC_NAMES];
+var CONFIG_KV_NAMESPACE_IDS = {
+  dev: "09e4962211fd4228b99a0822045bfc93",
+  staging: "3705128b7f6a49ddb145dc48da1a5817",
+  prod: "10ae9d24b1dc49beb15635583d61a968"
+};
+var configBucket = (env) => `shelter-config-${env}`;
+var dataBucket = (env) => `shelter-data-${env}`;
+var DATA_COPY_KEY = "config/v1/bundle.json";
+var DATA_COPY_CACHE_CONTROL = "public, max-age=300";
+var DEFAULT_WRANGLER = ["npx", "--yes", "wrangler@4.136.0"];
+function loadPublished(dir) {
+  return PUBLISH_DOCS.map((doc) => {
+    const path = join(dir, `${doc}.json`);
+    return { doc, path, bytes: new Uint8Array(readFileSync(path)) };
+  });
+}
+async function inspectPublished(files, env, now, trusted) {
+  const docs = new Set(files.map((f) => f.doc));
+  for (const doc of PUBLISH_DOCS) if (!docs.has(doc)) throw new Error(`publish: ${doc}.json is missing`);
+  const verifier = trusted ?? await verifierFor("config", EMBEDDED_KEYRING[env].config ?? []);
+  let version2;
+  let kid;
+  for (const f of files) {
+    let envelope;
+    try {
+      envelope = JSON.parse(new TextDecoder().decode(f.bytes));
+    } catch (e) {
+      throw new Error(`publish: ${f.path} is not JSON (${e.message})`);
+    }
+    if (!verifier.kids.includes(envelope.kid)) throw new Error(`publish: ${f.path} is signed by kid ${envelope.kid}, which the ${env} keyring does not trust (${verifier.kids.join(", ")})`);
+    let payload;
+    try {
+      payload = await open(verifier, envelope, { expectDoc: f.doc, expectEnv: env, now, minVersion: 1 });
+    } catch (e) {
+      throw new Error(`publish: ${f.path} does not verify as ${f.doc}/${env} (${e.message})`);
+    }
+    if (!Number.isInteger(payload.version) || payload.version < 1) throw new Error(`publish: ${f.path} carries no usable version`);
+    if (version2 !== void 0 && payload.version !== version2) throw new Error(`publish: mixed versions (${f.doc} is v${payload.version}, others v${version2})`);
+    if (kid !== void 0 && envelope.kid !== kid) throw new Error(`publish: mixed kids (${f.doc} is ${envelope.kid}, others ${kid})`);
+    version2 = payload.version;
+    kid = envelope.kid;
+  }
+  return { version: version2, kid };
+}
+function planPublish(input2) {
+  const w = input2.wrangler ?? DEFAULT_WRANGLER;
+  const { env, version: version2, kid } = input2;
+  const byDoc = new Map(input2.files.map((f) => [f.doc, f]));
+  const ordered = PUBLISH_DOCS.map((d) => byDoc.get(d));
+  const r2Put = (bucket, key, path, cacheControl) => [
+    ...w,
+    "r2",
+    "object",
+    "put",
+    `${bucket}/${key}`,
+    "--file",
+    path,
+    "--content-type",
+    "application/json",
+    ...cacheControl ? ["--cache-control", cacheControl] : [],
+    "--remote"
+  ];
+  const steps = [];
+  if (input2.targets.r2) {
+    for (const f of ordered) steps.push({ label: `r2 ${configBucket(env)}/v1/history/${f.doc}/${version2}.json`, argv: r2Put(configBucket(env), `v1/history/${f.doc}/${version2}.json`, f.path) });
+    for (const f of ordered) steps.push({ label: `r2 ${configBucket(env)}/v1/${f.doc}.json`, argv: r2Put(configBucket(env), `v1/${f.doc}.json`, f.path) });
+  }
+  if (input2.targets.kv) {
+    const metadata = JSON.stringify({ version: version2, kid });
+    for (const f of ordered) steps.push({ label: `kv v1:${f.doc} (${env})`, argv: [...w, "kv", "key", "put", `v1:${f.doc}`, "--path", f.path, "--namespace-id", CONFIG_KV_NAMESPACE_IDS[env], "--metadata", metadata, "--remote"] });
+  }
+  if (input2.targets.dataCopy) {
+    const bundle = byDoc.get("bundle");
+    steps.push({ label: `r2 ${dataBucket(env)}/${DATA_COPY_KEY}`, argv: r2Put(dataBucket(env), DATA_COPY_KEY, bundle.path, DATA_COPY_CACHE_CONTROL) });
+  }
+  return steps;
+}
+async function runPublish(steps, runner, log = () => {
+}) {
+  for (const [i, step] of steps.entries()) {
+    const res = await runner(step.argv);
+    if (res.code !== 0) {
+      const tail = `${res.stderr || res.stdout}`.trim().split("\n").slice(-5).join("\n");
+      throw new Error(`publish step ${i + 1}/${steps.length} failed (${step.label}, exit ${res.code}):
+${tail}`);
+    }
+    log(`ok ${i + 1}/${steps.length} ${step.label}`);
+  }
+}
+function parsePublishArgs(args) {
+  const dir = args[0];
+  if (!dir || dir.startsWith("--")) throw new Error('usage: config-tool publish <published/<env>/v1/> --env <dev|staging|prod> [--r2] [--then-kv] [--data-copy] [--dry-run] [--wrangler "<cmd>"]');
+  const opt = (k) => {
+    const i = args.indexOf(`--${k}`);
+    return i >= 0 ? args[i + 1] : void 0;
+  };
+  const env = opt("env");
+  if (env !== "dev" && env !== "staging" && env !== "prod") throw new Error("--env must be dev|staging|prod");
+  const targets = { r2: args.includes("--r2"), kv: args.includes("--then-kv"), dataCopy: args.includes("--data-copy") };
+  if (!targets.r2 && !targets.kv && !targets.dataCopy) throw new Error("nothing to publish: pass at least one of --r2, --then-kv, --data-copy");
+  const w = opt("wrangler");
+  const wrangler = w ? w.split(/\s+/).filter(Boolean) : DEFAULT_WRANGLER;
+  if (wrangler.length === 0) throw new Error("--wrangler must name a command");
+  return { dir, env, targets, dryRun: args.includes("--dry-run"), wrangler };
+}
+
 // packages/config-tool/src/cli.ts
-var readDocs = (dir) => Object.fromEntries(DOC_NAMES.map((n) => [n, JSON.parse(readFileSync(join(dir, `${n}.json`), "utf8"))]));
+var spawnRunner = (argv) => new Promise((resolve) => {
+  const child = spawn(argv[0], argv.slice(1), { stdio: ["ignore", "pipe", "pipe"], env: process.env });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (d) => {
+    stdout += d.toString();
+  });
+  child.stderr.on("data", (d) => {
+    stderr += d.toString();
+  });
+  child.on("error", (e) => resolve({ code: 127, stdout, stderr: `${stderr}
+${e.message}` }));
+  child.on("close", (code) => resolve({ code: code ?? 1, stdout, stderr }));
+});
+var readDocs = (dir) => Object.fromEntries(DOC_NAMES.map((n) => [n, JSON.parse(readFileSync2(join2(dir, `${n}.json`), "utf8"))]));
 async function main() {
   const [cmd, ...args] = process.argv.slice(2);
   if (cmd === "validate") {
     const dir = args[0] ?? "docs";
     const { errors } = validate2(readDocs(dir));
-    const policyPath = join(dir, "alerts-policy.json");
-    if (existsSync(policyPath)) errors.push(...validatePolicy(JSON.parse(readFileSync(policyPath, "utf8"))).errors);
+    const policyPath = join2(dir, "alerts-policy.json");
+    if (existsSync(policyPath)) errors.push(...validatePolicy(JSON.parse(readFileSync2(policyPath, "utf8"))).errors);
     if (errors.length) {
       console.error(errors.join("\n"));
       process.exit(1);
@@ -19428,13 +19621,13 @@ async function main() {
       console.error("CONFIG_ED25519_PRIVATE is required");
       process.exit(1);
     }
-    const header = { env: opt("env"), version: Number(opt("version")), generatedAt: (/* @__PURE__ */ new Date()).toISOString(), maxAgeSeconds: 2592000, gitSha: opt("git-sha") ?? "0".repeat(40) };
+    const header = { env: opt("env"), version: Number(opt("version")), generatedAt: (/* @__PURE__ */ new Date()).toISOString(), maxAgeSeconds: opt("max-age") ? Number(opt("max-age")) : 2592e3, gitSha: opt("git-sha") ?? "0".repeat(40) };
     const signer = await Ed25519Signer.fromPkcs8(opt("kid") ?? "cfg-2026a", "config", decodePkcs8(key));
     const res = await sealBundle({ docs: readDocs(args[0] ?? "docs"), header, signer });
     const out = opt("out") ?? "published/v1";
     mkdirSync(out, { recursive: true });
-    writeFileSync(join(out, "bundle.json"), JSON.stringify(res.bundle));
-    for (const name of DOC_NAMES) writeFileSync(join(out, `${name}.json`), JSON.stringify(res.perDoc[name]));
+    writeFileSync(join2(out, "bundle.json"), JSON.stringify(res.bundle));
+    for (const name of DOC_NAMES) writeFileSync(join2(out, `${name}.json`), JSON.stringify(res.perDoc[name]));
     console.log(`sealed v${res.version} \u2192 ${out}`);
   } else if (cmd === "seal-policy") {
     const opt = (k) => {
@@ -19461,11 +19654,11 @@ async function main() {
       process.exit(1);
     }
     const signer = await Ed25519Signer.fromPkcs8(opt("kid") ?? "cfg-2026a", "config", decodePkcs8(key));
-    const { envelope, version: version2 } = await sealPolicy({ policy: JSON.parse(readFileSync(policyFile, "utf8")), header, signer });
+    const { envelope, version: version2 } = await sealPolicy({ policy: JSON.parse(readFileSync2(policyFile, "utf8")), header, signer });
     const out = opt("out") ?? "published/v1";
-    mkdirSync(join(out, "alerts"), { recursive: true });
-    writeFileSync(join(out, "alerts", "policy.json"), JSON.stringify(envelope));
-    console.log(`sealed alerts-policy v${version2} (${header.env}) \u2192 ${join(out, "alerts", "policy.json")}`);
+    mkdirSync(join2(out, "alerts"), { recursive: true });
+    writeFileSync(join2(out, "alerts", "policy.json"), JSON.stringify(envelope));
+    console.log(`sealed alerts-policy v${version2} (${header.env}) \u2192 ${join2(out, "alerts", "policy.json")}`);
   } else if (cmd === "verify") {
     const opt = (k) => {
       const i = args.indexOf(`--${k}`);
@@ -19477,8 +19670,26 @@ async function main() {
     console.log("verified");
   } else if (cmd === "keygen") {
     console.log(JSON.stringify(await keygen(args[0] ?? "cfg-2026a"), null, 2));
+  } else if (cmd === "publish") {
+    let parsed;
+    try {
+      parsed = parsePublishArgs(args);
+    } catch (e) {
+      console.error(e.message);
+      process.exit(2);
+    }
+    const files = loadPublished(parsed.dir);
+    const { version: version2, kid } = await inspectPublished(files, parsed.env, Date.now());
+    const steps = planPublish({ env: parsed.env, files, version: version2, kid, targets: parsed.targets, wrangler: parsed.wrangler });
+    console.log(`publish ${parsed.env} v${version2} (kid ${kid}): ${steps.length} step(s)${parsed.dryRun ? " \u2014 dry run, nothing uploaded" : ""}`);
+    if (parsed.dryRun) {
+      for (const step of steps) console.log(`  ${step.argv.join(" ")}`);
+      return;
+    }
+    await runPublish(steps, spawnRunner, (line) => console.log(line));
+    console.log(`published ${parsed.env} v${version2}`);
   } else {
-    console.error("usage: config-tool <validate|seal|seal-policy|verify|keygen> \u2026");
+    console.error("usage: config-tool <validate|seal|seal-policy|verify|keygen|publish> \u2026");
     process.exit(2);
   }
 }
