@@ -1,16 +1,45 @@
 # TheShelterApp/config — validate on PR, publish per branch → env on push, and a freshness heartbeat.
-# The signer is the bundled tools/config-tool.mjs (self-contained; no registry needed).
+# The signer/publisher is the bundled tools/config-tool.mjs (self-contained; no registry needed).
+#
+# Jobs and what each one may run (review findings [1]/[29]/[28]):
+#   publish         push → validate, seal, self-check, commit + push the mirror. Runs in `prod` (1 reviewer) / `dev` /
+#                   `staging`. It runs ONLY git, the verifier pinned in THIS file (PINNED_VERIFY_MJS) and the tool of
+#                   the pushed (approved) commit; the signing key is in ONE step, which runs nothing but that tool's
+#                   seal/seal-policy.
+#   publish-upload  after `publish`: uploads the branch TIP's mirror. No signing key, read-only GITHUB_TOKEN.
+#   refresh         schedule/dispatch → re-seal the LAST PUBLISHED content of every env so nothing expires. Runs NO
+#                   branch-tip code at all: the published bundle is located and checked with PINNED_VERIFY_MJS (a
+#                   GITHUB_TOKEN push cannot change a workflow file), and the key step runs only the seal commands of
+#                   the tool at the published (signature-verified, previously approved) commit.
+#   refresh-upload  after `refresh`: uploads each env branch's tip mirror, like publish-upload.
+# Branch-tip code (tools/config-tool.mjs publish) and `npx wrangler` with its unpinned dependency tree run ONLY in the
+# two upload jobs, which never reference the signing key and cannot push: a step boundary is not a security boundary
+# inside one job (any step can read the runner's memory), a job boundary is. The git push credential is never
+# persisted into .git/config (persist-credentials: false); it is handed to the `git push` command alone. The repo is
+# public, so fetches need no credential.
+#
+# Uploads are serialized per env (concurrency group config-upload-<env>, shared by publish-upload and refresh-upload;
+# a separate job so a prod publish parked on the reviewer never holds it). Each upload job uploads the branch TIP's
+# mirror, which only moves forward, and config-tool publish reads the live versions first and never overwrites a newer
+# one. GitHub keeps at most one PENDING job per group: a newer queued upload cancels an older pending one, which is
+# harmless because the job that runs uploads the same or a newer tip mirror.
 #
 # Keys (platform plan D-8, contract C6): secret CONFIG_ED25519_PRIVATE (PKCS#8 PEM) + variable CONFIG_KID (its kid,
 # default cfg-2026a). dev/staging use the REPO-level secret (cfg-2026a); the `prod` and `prod-refresh` environments
 # carry their own secret + CONFIG_KID (cfg-2026c after owner step O-4). A kid must already be trusted by every
-# consumer (platform keyring, iOS EmbeddedKeys, tools/verify-envelope.mjs) before anything signs with it.
-# Uploads use CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID (environment secrets of dev/staging/prod/prod-refresh).
-# The `prod` environment requires 1 reviewer; `prod-refresh` (scheduled re-seal of already-approved content) does not.
+# consumer (platform keyring, iOS EmbeddedKeys, PINNED_VERIFY_MJS below, tools/verify-envelope.mjs) before anything
+# signs with it.
+# FOLLOW-UP at owner step O-4: as soon as the first cfg-2026c prod publish has landed on main, remove cfg-2026a from
+# TRUSTED.prod in PINNED_VERIFY_MJS and in tools/verify-envelope.mjs (one commit, dev → staging → main). Until then
+# the prod refresh accepts a cfg-2026a-signed prod mirror, and cfg-2026a is readable by the unreviewed dev/staging
+# jobs — so a forged prod mirror could steer what the prod-refresh job signs with cfg-2026c.
+# Uploads use CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID (environment secrets of dev/staging/prod-refresh: both
+# prod upload jobs run in `prod-refresh`, so an approved prod publish needs no second approval to upload).
 #
 # Invariants this file relies on — DO NOT rewrite the history of dev/staging/main: the sealed version is the commit
-# count of the branch tip (monotonic only while history is append-only), and the published `gitSha` must stay
-# reachable. Actions are pinned to full SHAs because this workflow holds a signing key.
+# count of the branch tip (monotonic only while history is append-only; both seal jobs fail loudly when the count is
+# not above the version the mirror holds), and the published `gitSha` must stay reachable. Actions are pinned to full
+# SHAs because this workflow holds a signing key.
 name: config
 on:
   pull_request:
@@ -32,12 +61,61 @@ on:
 permissions:
   contents: read
 
+env:
+  # The envelope verifier every pre-signing decision uses: which published commit the refresh re-seals, the version
+  # floor, and the pre-push self-check. Pinned HERE on purpose and never read from the checkout. Keep KEYS/TRUSTED in
+  # step with the platform keyring (packages/domain/src/keyring.ts), iOS EmbeddedKeys and tools/verify-envelope.mjs.
+  #   node pinned-verify.mjs <file> --doc <doc> --env <dev|staging|prod> [--kid <kid>] [--version <n>] [--print git-sha|version]
+  # Freshness is deliberately NOT checked: the refresh must be able to rescue an expired document.
+  PINNED_VERIFY_MJS: |
+    import { verify } from 'node:crypto'
+    import { readFileSync } from 'node:fs'
+    const KEYS = {
+      'cfg-2026a': 'JFJqkUuyDkKVkZupAwfSRc+X2Nn82I3kkSxsxlApyJA=',
+      'cfg-2026b': 'wb9HVx7ZRkU2VVO1xM9KA/AXjsIQHU3S2H9GIdFh0/g=',
+      'cfg-2026c': '5csqtamD1ZAFR5XneSDjPQ12sRGbdSGRnuDuB4sjqYA=',
+    }
+    // FOLLOW-UP (owner step O-4): after the first cfg-2026c prod publish, drop cfg-2026a from prod (see the header).
+    const TRUSTED = {
+      dev: ['cfg-2026a', 'cfg-2026b', 'cfg-2026c'],
+      staging: ['cfg-2026a', 'cfg-2026b', 'cfg-2026c'],
+      prod: ['cfg-2026a', 'cfg-2026b', 'cfg-2026c'],
+    }
+    const args = process.argv.slice(2)
+    const opt = (name) => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : undefined }
+    const die = (msg) => { console.error(`pinned-verify: ${msg}`); process.exit(1) }
+    const [file] = args
+    const doc = opt('doc'), env = opt('env'), kid = opt('kid'), version = opt('version'), print = opt('print')
+    if (!file || file.startsWith('--') || !doc || !Object.hasOwn(TRUSTED, env ?? '')) die('usage: pinned-verify.mjs <file> --doc <doc> --env <dev|staging|prod> [--kid <kid>] [--version <n>] [--print git-sha|version]')
+    let envelope
+    try { envelope = JSON.parse(readFileSync(file, 'utf8')) } catch (e) { die(`${file} is not readable JSON (${e.message})`) }
+    if (!envelope || typeof envelope !== 'object') die(`${file} is not an envelope`)
+    if (!TRUSTED[env].includes(envelope.kid)) die(`${file} is signed by kid ${envelope.kid}, which ${env} does not trust (${TRUSTED[env].join(', ')})`)
+    if (kid !== undefined && envelope.kid !== kid) die(`${file} is signed by kid ${envelope.kid}, expected ${kid} (CONFIG_KID and the CONFIG_ED25519_PRIVATE secret must name the same key)`)
+    const spki = Buffer.concat([Buffer.from('302a300506032b6570032100', 'hex'), Buffer.from(KEYS[envelope.kid], 'base64')])
+    const payload = Buffer.from(String(envelope.payload), 'base64')
+    if (!verify(null, payload, { key: spki, format: 'der', type: 'spki' }, Buffer.from(String(envelope.sig), 'base64'))) die(`${file}: the signature does NOT verify under ${envelope.kid}`)
+    let body
+    try { body = JSON.parse(payload.toString('utf8')) } catch (e) { die(`${file}: the signed payload is not JSON (${e.message})`) }
+    if (!body || body.doc !== doc || body.env !== env) die(`${file} is ${body?.doc}/${body?.env}, expected ${doc}/${env}`)
+    if (!Number.isInteger(body.version) || body.version < 1) die(`${file} carries no usable version`)
+    if (version !== undefined && String(body.version) !== version) die(`${file} is v${body.version}, expected v${version}`)
+    if (print === 'git-sha') {
+      if (!/^[0-9a-f]{40}$/.test(String(body.gitSha)) || /^0+$/.test(body.gitSha)) die(`${file} carries no usable gitSha`)
+      console.log(body.gitSha)
+    } else if (print === 'version') {
+      console.log(body.version)
+    } else if (print !== undefined) {
+      die(`unknown --print ${print}`)
+    }
+
 jobs:
   validate:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with: { persist-credentials: false }
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with: { node-version: '22' }
       - run: node tools/config-tool.mjs validate docs/
@@ -53,20 +131,21 @@ jobs:
       ENV: ${{ github.ref_name == 'main' && 'prod' || github.ref_name }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-        with: { fetch-depth: 0, persist-credentials: true }
+        with: { fetch-depth: 0, persist-credentials: false }
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with: { node-version: '22' }
-      - name: Sync to the branch tip and confirm this push is still the latest
+      - name: Sync to the branch tip, confirm this push is still the latest, check the version (git + pinned verifier only)
         run: |
           set -euo pipefail
+          printf '%s\n' "$PINNED_VERIFY_MJS" > "$RUNNER_TEMP/pinned-verify.mjs"
           # A push-event run checks out the EVENT commit. A run that waited on the prod reviewer (or just queued)
           # can start BEHIND `refresh` commits that re-sealed published/**. Sealing from the stale commit would
           # (a) compute a version (commit count) not above the live one — the gateway treats a lower version as
           # a rollback and drops to its restrictive fallback, iOS keeps last-good — and (b) make the mirror
-          # commit collide with those refresh commits, a conflict a re-run repeats (same event commit). So move
-          # to the tip first: refresh never touches docs/, so this only pulls in mirror commits.
-          git fetch origin "$BRANCH"
-          git checkout -B "$BRANCH" "origin/$BRANCH"
+          # commit collide with those refresh commits. So move to the tip first: refresh never touches docs/, so
+          # this only pulls in mirror commits.
+          git fetch -q origin "$BRANCH"
+          git checkout -q -B "$BRANCH" "origin/$BRANCH"
           # What the reviewer approved is the EVENT commit's docs/tools. If a NEWER push to this branch changed
           # them, that push's own run must publish — sealing this one on the tip would ship older content under
           # a higher version (out-of-order approvals). Fail loudly instead.
@@ -74,73 +153,117 @@ jobs:
             echo "::error::this push has been superseded by a newer push to $BRANCH — approve/run the latest run instead"
             exit 1
           fi
-          node tools/config-tool.mjs validate docs/
-      - name: Seal (JCS + Ed25519), self-check, commit the mirror, push — retried if a refresh lands meanwhile
+          # The approved docs AND tool, taken from the event commit itself (equal to the tip's, checked above).
+          SRC=$(mktemp -d)
+          git archive "$GITHUB_SHA" docs tools | tar -x -C "$SRC"
+          # Version = commit count of the TIP. It must be strictly above the version the mirror holds (review [9]):
+          # a rewritten history (force-push, rebase, squash) can lower the count, and consumers treat a lower
+          # version as a rollback (the gateway drops to its restrictive fallback policy, iOS keeps last-good).
+          VERSION=$(git rev-list --count HEAD)
+          MIRROR="published/$ENV/v1/bundle.json"
+          PUBLISHED=0
+          if [ -e "$MIRROR" ]; then
+            PUBLISHED=$(node "$RUNNER_TEMP/pinned-verify.mjs" "$MIRROR" --doc bundle --env "$ENV" --print version)
+          fi
+          if [ "$VERSION" -le "$PUBLISHED" ]; then
+            echo "::error::v$VERSION (the commit count of $BRANCH) is not above the published v$PUBLISHED — the branch history was rewritten; restore it (never force-push dev/staging/main) before publishing"
+            exit 1
+          fi
+          { echo "SRC=$SRC"; echo "VERSION=$VERSION"; } >> "$GITHUB_ENV"
+      - name: Validate the approved docs with the approved tool
+        run: node "$SRC/tools/config-tool.mjs" validate "$SRC/docs/"
+      - name: Seal (JCS + Ed25519) — the only step with the signing key; it runs nothing but the approved seal commands
         env:
           CONFIG_ED25519_PRIVATE: ${{ secrets.CONFIG_ED25519_PRIVATE }}
           CONFIG_KID: ${{ vars.CONFIG_KID || 'cfg-2026a' }}
         run: |
           set -euo pipefail
+          node "$SRC/tools/config-tool.mjs" seal "$SRC/docs/" --env "$ENV" --version "$VERSION" --git-sha "$GITHUB_SHA" --kid "$CONFIG_KID" --out "published/$ENV/v1/"
+          # --max-age 90d: a stable policy must not silently expire between infrequent edits; the `refresh`
+          # heartbeat below keeps it fresh well inside that. An expiry is observable in the gateway's status.json.
+          node "$SRC/tools/config-tool.mjs" seal-policy "$SRC/docs/alerts-policy.json" --env "$ENV" --version "$VERSION" --kid "$CONFIG_KID" --max-age 7776000 --out "published/$ENV/v1/"
+      - name: Self-check every sealed file before anything leaves the runner (no key)
+        env:
+          CONFIG_KID: ${{ vars.CONFIG_KID || 'cfg-2026a' }}
+        run: |
+          set -euo pipefail
+          # Each file must verify under CONFIG_KID at v$VERSION for this env: a secret that does not match
+          # CONFIG_KID fails here, not on devices.
+          V="$RUNNER_TEMP/pinned-verify.mjs"
+          D="published/$ENV/v1"
+          for doc in bundle ios-config origins alert-thresholds features kill-switches; do
+            node "$V" "$D/$doc.json" --doc "$doc" --env "$ENV" --kid "$CONFIG_KID" --version "$VERSION"
+          done
+          node "$V" "$D/alerts/policy.json" --doc alerts-policy --env "$ENV" --kid "$CONFIG_KID" --version "$VERSION"
+          # The approved tool's own pre-upload inspection (trusted kid per its embedded keyring, fresh, one version).
+          node "$SRC/tools/config-tool.mjs" publish "$D/" --env "$ENV" --policy --r2 --then-kv --data-copy --dry-run > /dev/null
+      - name: Commit the mirror and push it (the only step that gets the push credential)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
           git config user.name config-bot
           git config user.email bot@users.noreply.github.com
-          for attempt in 1 2 3; do
-            # Version = commit count of the TIP: strictly above every earlier publish/refresh on this branch.
-            VERSION=$(git rev-list --count HEAD)
-            node tools/config-tool.mjs seal docs/ --env "$ENV" --version "$VERSION" --git-sha "$GITHUB_SHA" --kid "$CONFIG_KID" --out "published/$ENV/v1/"
-            # --max-age 90d: a stable policy must not silently expire between infrequent edits; the `refresh`
-            # heartbeat below keeps it fresh well inside that. An expiry is observable in the gateway's status.json.
-            node tools/config-tool.mjs seal-policy docs/alerts-policy.json --env "$ENV" --version "$VERSION" --kid "$CONFIG_KID" --max-age 7776000 --out "published/$ENV/v1/"
-            # Self-check BEFORE anything leaves the runner: every sealed file must verify under a kid the clients trust
-            # (a secret that does not match CONFIG_KID fails here, not on devices).
-            node tools/verify-envelope.mjs "published/$ENV/v1/bundle.json" --doc bundle --env "$ENV" --kid "$CONFIG_KID"
-            node tools/verify-envelope.mjs "published/$ENV/v1/alerts/policy.json" --doc alerts-policy --env "$ENV" --kid "$CONFIG_KID"
-            node tools/config-tool.mjs publish "published/$ENV/v1/" --env "$ENV" --r2 --then-kv --data-copy --dry-run > /dev/null
-            git add published/
-            if git diff --cached --quiet -- published/; then echo "no change to publish"; exit 0; fi
-            # Path-limited commit: only the mirror, never anything else that happens to be in the index.
-            git commit -q -m "publish $ENV v$VERSION" -- published/
-            if git push origin "HEAD:$BRANCH"; then
-              echo "published $ENV v$VERSION (docs @ $GITHUB_SHA)"
-              exit 0
-            fi
-            echo "push rejected — a refresh landed meanwhile; re-sealing on the new tip (attempt $attempt)"
-            git fetch origin "$BRANCH"
-            git reset -q --hard "origin/$BRANCH"
-            git diff --quiet "$GITHUB_SHA" HEAD -- docs/ tools/ || { echo "::error::superseded during retry"; exit 1; }
-          done
-          echo "::error::could not push the mirror after 3 attempts"
+          git add published/
+          if git diff --cached --quiet -- published/; then echo "no change to publish"; exit 0; fi
+          # Path-limited commit: only the mirror, never anything else that happens to be in the index.
+          git commit -q -m "publish $ENV v$VERSION" -- published/
+          AUTH=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+          echo "::add-mask::$AUTH"
+          push() { git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $AUTH" push -q origin "HEAD:$BRANCH"; }
+          if push; then echo "published $ENV v$VERSION (docs @ $GITHUB_SHA)"; exit 0; fi
+          # Rejected: something landed on $BRANCH after the sync. This job never re-seals (its key step is over).
+          git fetch -q origin "$BRANCH"
+          if ! git diff --quiet "$GITHUB_SHA" "origin/$BRANCH" -- docs/ tools/; then
+            echo "::error::this push has been superseded by a newer push to $BRANCH — approve/run the latest run instead"
+            exit 1
+          fi
+          if git diff --quiet HEAD~1 "origin/$BRANCH" -- published/; then
+            # Only files outside docs/, tools/ and published/ moved, so every mirror on the branch is still below
+            # v$VERSION: replay the one mirror commit on the new tip unchanged.
+            git rebase -q "origin/$BRANCH"
+            if push; then echo "published $ENV v$VERSION (docs @ $GITHUB_SHA; replayed on the new tip)"; exit 0; fi
+          fi
+          echo "::error::a mirror commit (a refresh) landed on $BRANCH while this run sealed v$VERSION — re-run this job; it re-seals above it"
           exit 1
-      # AFTER the mirror push on purpose: a mirror that is ahead of R2 self-heals on the next refresh/dispatch,
-      # whereas R2 ahead of a mirror that never landed would be reverted by the next refresh (it re-seals the
-      # mirror's gitSha). The gateway reads alerts/policy.json from shelter-data-<env>; this ACTIVATES the policy.
-      - name: Publish alerts-policy → data bucket (R2)
+
+  # AFTER the mirror push on purpose: a mirror that is ahead of the stores self-heals on the next upload, whereas
+  # stores ahead of a mirror that never landed would be reverted by the next refresh (it re-seals the mirror's gitSha).
+  # What it writes (config-tool publish; see the config README): alerts/policy.json → shelter-data-<env> (the gateway
+  # reads it; this ACTIVATES the policy), then the bundle → shelter-config-<env> R2 (live + immutable history) → KV
+  # v1:<doc> with {version,kid} metadata → the public copy shelter-data-<env>/config/v1/bundle.json (contract C7).
+  # config-tool verifies every file against its embedded keyring and reads the live versions before the first write.
+  # ROLLBACK: signed-policy replay is also closed by a consumer-side version floor in the gateway (detector DO).
+  publish-upload:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    environment: ${{ github.ref_name == 'main' && 'prod-refresh' || github.ref_name }}
+    concurrency: { group: "config-upload-${{ github.ref_name == 'main' && 'prod' || github.ref_name }}", cancel-in-progress: false }
+    env:
+      ENV: ${{ github.ref_name == 'main' && 'prod' || github.ref_name }}
+    steps:
+      # The branch TIP (resolved when this job starts, i.e. after it holds the upload group), not the event commit.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with: { ref: "${{ github.ref_name }}", persist-credentials: false }
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with: { node-version: '22' }
+      - name: Upload the tip mirror (alerts policy → data bucket; bundle → config bucket + KV + public data copy)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          npx --yes wrangler@4.136.0 r2 object put "shelter-data-$ENV/alerts/policy.json" \
-            --file "published/$ENV/v1/alerts/policy.json" --remote --content-type application/json
-          echo "uploaded alerts-policy → shelter-data-$ENV/alerts/policy.json"
-      # The config BUNDLE: shelter-config-<env> R2 (v1/<doc>.json + immutable v1/history/<doc>/<version>.json), then
-      # KV v1:<doc> with {version,kid} metadata (what config[-env].theshelter.app serves), then the public static copy
-      # shelter-data-<env>/config/v1/bundle.json (max-age=300) the app fetches first (contract C7). config-tool verifies
-      # every file against its embedded keyring before the first upload; the upload itself is idempotent.
-      # ROLLBACK: signed-policy replay is closed by a consumer-side version floor in the gateway (detector DO),
-      # not here — see the alerts-gateway. This job only publishes owner-approved (or scheduled-refresh) content.
-      - name: Publish the config bundle → config bucket + KV + public data copy
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: node tools/config-tool.mjs publish "published/$ENV/v1/" --env "$ENV" --r2 --then-kv --data-copy
+        run: node tools/config-tool.mjs publish "published/$ENV/v1/" --env "$ENV" --policy --r2 --then-kv --data-copy
 
   # Unattended freshness: re-seal the LAST PUBLISHED content of every env with a fresh generatedAt, so a stable,
   # rarely-edited config never silently expires (an expired BUNDLE strands fresh installs on the compiled
   # default and blocks kill-switch delivery; an expired POLICY drops the gateway to the restrictive fallback).
   # No REVIEWER gate, and it is safe without one: the content is NOT the branch HEAD but the docs (and the signing
-  # tool) at the `gitSha` recorded inside the currently published bundle — whose SIGNATURE is verified first, and
-  # which must be an ancestor of this branch — i.e. exactly what was last approved and published. A push that is
-  # still waiting on the prod reviewer, an edited bundle.json, or a foreign commit can therefore never be released by
-  # the schedule. The version (commit count) only grows, so consumer version floors accept it.
+  # tool) at the `gitSha` recorded inside the currently published bundle — whose SIGNATURE is verified first by the
+  # pinned verifier, and which must be an ancestor of this branch — i.e. exactly what was last approved and
+  # published. A push that is still waiting on the prod reviewer, an edited bundle.json, or a foreign commit can
+  # therefore never be released by the schedule. The version (commit count) only grows (checked), so consumer
+  # version floors accept it.
   # Each leg runs in an environment only so it can read that env's secrets/variables: `prod-refresh` (no reviewer,
   # branch main) for prod, `dev` / `staging` for the others. Keyed on the MATRIX, not github.ref_name — a scheduled
   # run's ref is always main, which would hand the prod key to the dev/staging legs.
@@ -157,79 +280,130 @@ jobs:
           - { env: dev, ref: dev }
           - { env: staging, ref: staging }
           - { env: prod, ref: main }
-    # Serializes refreshes of one branch. `publish` deliberately shares NO group with this: a publish parked on
-    # the prod reviewer gate would otherwise block the heartbeat indefinitely. The rare publish/refresh race is
-    # handled by both jobs' push-retry loops.
+    # Serializes refreshes of one branch. `publish` deliberately shares NO group with this: a publish parked on the
+    # prod reviewer gate would otherwise block the heartbeat indefinitely. A publish/refresh race is resolved at
+    # push time: a rejected push never re-seals (see the push steps).
     concurrency: { group: "config-refresh-${{ matrix.ref }}", cancel-in-progress: false }
     env:
       ENV: ${{ matrix.env }}
       REF: ${{ matrix.ref }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-        with: { ref: "${{ matrix.ref }}", fetch-depth: 0, persist-credentials: true }
+        with: { ref: "${{ matrix.ref }}", fetch-depth: 0, persist-credentials: false }
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with: { node-version: '22' }
-      - name: Locate the last published (reviewed) content — signature-verified
+      - name: Locate the last published (reviewed) content with the pinned verifier, check the version
         run: |
           set -euo pipefail
-          # Trust the gitSha ONLY if the published bundle verifies under one of the env's trusted PUBLIC keys (the
-          # C6 set every client embeds: cfg-2026a/b/c — tools/verify-envelope.mjs) and is the bundle for THIS env.
-          # Expiry is deliberately NOT checked here — an expired bundle is exactly what this job must rescue.
-          PUBLISHED_SHA=$(node tools/verify-envelope.mjs "published/$ENV/v1/bundle.json" --doc bundle --env "$ENV" --print git-sha)
+          printf '%s\n' "$PINNED_VERIFY_MJS" > "$RUNNER_TEMP/pinned-verify.mjs"
+          V="$RUNNER_TEMP/pinned-verify.mjs"
+          MIRROR="published/$ENV/v1/bundle.json"
+          # Trust the gitSha ONLY if the published bundle verifies under one of the env's trusted PUBLIC keys and is
+          # the bundle for THIS env. Nothing from the checkout runs here. Expiry is deliberately NOT checked — an
+          # expired bundle is exactly what this job must rescue.
+          PUBLISHED_SHA=$(node "$V" "$MIRROR" --doc bundle --env "$ENV" --print git-sha)
+          PUBLISHED=$(node "$V" "$MIRROR" --doc bundle --env "$ENV" --print version)
           git cat-file -e "$PUBLISHED_SHA^{commit}"
           # Must be on THIS branch's own history: a sha from another branch cannot be smuggled in via bundle.json.
           git merge-base --is-ancestor "$PUBLISHED_SHA" HEAD || { echo "::error::published gitSha $PUBLISHED_SHA is not an ancestor of $REF"; exit 1; }
-          echo "PUBLISHED_SHA=$PUBLISHED_SHA" >> "$GITHUB_ENV"
-          echo "last published $ENV content is docs @ $PUBLISHED_SHA"
-      - name: Re-seal from the published sha (docs AND tool), self-check, commit the mirror, push — retried on a race
+          # Version = commit count of the tip, strictly above the published one (review [9]; see `publish`).
+          VERSION=$(git rev-list --count HEAD)
+          if [ "$VERSION" -le "$PUBLISHED" ]; then
+            echo "::error::v$VERSION (the commit count of $REF) is not above the published v$PUBLISHED — the branch history was rewritten; restore it before refreshing"
+            exit 1
+          fi
+          # Extract docs/ and tools/ at the published sha into a scratch dir — the worktree is never mutated, so a
+          # doc deleted since then cannot be resurrected into the mirror commit.
+          SRC=$(mktemp -d)
+          git archive "$PUBLISHED_SHA" docs tools | tar -x -C "$SRC"
+          { echo "PUBLISHED_SHA=$PUBLISHED_SHA"; echo "VERSION=$VERSION"; echo "SRC=$SRC"; } >> "$GITHUB_ENV"
+          echo "last published $ENV content is docs @ $PUBLISHED_SHA (v$PUBLISHED); re-sealing it as v$VERSION"
+      - name: Validate the published docs with the published tool
+        run: node "$SRC/tools/config-tool.mjs" validate "$SRC/docs/"
+      - name: Re-seal — the only step with the signing key; it runs nothing but the published tool's seal commands
         env:
           CONFIG_ED25519_PRIVATE: ${{ secrets.CONFIG_ED25519_PRIVATE }}
           CONFIG_KID: ${{ vars.CONFIG_KID || 'cfg-2026a' }}
         run: |
           set -euo pipefail
-          # Extract docs/ and tools/ at the published sha into a scratch dir — the worktree is never mutated, so a
-          # doc deleted since then cannot be resurrected into the mirror commit, and the signing tool that runs
-          # under the prod key is the reviewed one, not whatever is at the branch tip.
-          SRC=$(mktemp -d)
-          git archive "$PUBLISHED_SHA" docs tools | tar -x -C "$SRC"
-          node "$SRC/tools/config-tool.mjs" validate "$SRC/docs/"
+          node "$SRC/tools/config-tool.mjs" seal "$SRC/docs/" --env "$ENV" --version "$VERSION" --git-sha "$PUBLISHED_SHA" --kid "$CONFIG_KID" --out "published/$ENV/v1/"
+          node "$SRC/tools/config-tool.mjs" seal-policy "$SRC/docs/alerts-policy.json" --env "$ENV" --version "$VERSION" --kid "$CONFIG_KID" --max-age 7776000 --out "published/$ENV/v1/"
+      - name: Self-check every re-sealed file (no key; pinned verifier only)
+        env:
+          CONFIG_KID: ${{ vars.CONFIG_KID || 'cfg-2026a' }}
+        run: |
+          set -euo pipefail
+          V="$RUNNER_TEMP/pinned-verify.mjs"
+          D="published/$ENV/v1"
+          for doc in bundle ios-config origins alert-thresholds features kill-switches; do
+            node "$V" "$D/$doc.json" --doc "$doc" --env "$ENV" --kid "$CONFIG_KID" --version "$VERSION"
+          done
+          node "$V" "$D/alerts/policy.json" --doc alerts-policy --env "$ENV" --kid "$CONFIG_KID" --version "$VERSION"
+      - name: Commit the refreshed mirror and push it (the only step that gets the push credential)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
           git config user.name config-bot
           git config user.email bot@users.noreply.github.com
-          for attempt in 1 2 3; do
-            VERSION=$(git rev-list --count HEAD)
-            node "$SRC/tools/config-tool.mjs" seal "$SRC/docs/" --env "$ENV" --version "$VERSION" --git-sha "$PUBLISHED_SHA" --kid "$CONFIG_KID" --out "published/$ENV/v1/"
-            node "$SRC/tools/config-tool.mjs" seal-policy "$SRC/docs/alerts-policy.json" --env "$ENV" --version "$VERSION" --kid "$CONFIG_KID" --max-age 7776000 --out "published/$ENV/v1/"
-            # Self-check with the branch-tip verifiers (they never see the signing key): see `publish`.
-            node tools/verify-envelope.mjs "published/$ENV/v1/bundle.json" --doc bundle --env "$ENV" --kid "$CONFIG_KID"
-            node tools/verify-envelope.mjs "published/$ENV/v1/alerts/policy.json" --doc alerts-policy --env "$ENV" --kid "$CONFIG_KID"
-            node tools/config-tool.mjs publish "published/$ENV/v1/" --env "$ENV" --r2 --then-kv --data-copy --dry-run > /dev/null
-            git add published/
-            if git diff --cached --quiet -- published/; then echo "nothing to refresh"; exit 0; fi
-            git commit -q -m "refresh $ENV v$VERSION" -- published/
-            # A push made with GITHUB_TOKEN does not start another workflow run, so this cannot loop or trip the
-            # prod reviewer gate.
-            if git push origin "HEAD:$REF"; then
-              echo "refreshed $ENV v$VERSION (docs @ $PUBLISHED_SHA)"
-              exit 0
-            fi
-            echo "push rejected — a publish landed meanwhile; re-sealing on the new tip (attempt $attempt)"
-            git fetch origin "$REF"
-            git reset -q --hard "origin/$REF"
-          done
-          echo "::error::could not push the refreshed mirror after 3 attempts"
+          git add published/
+          if git diff --cached --quiet -- published/; then echo "nothing to refresh"; exit 0; fi
+          git commit -q -m "refresh $ENV v$VERSION" -- published/
+          AUTH=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+          echo "::add-mask::$AUTH"
+          # A push made with GITHUB_TOKEN does not start another workflow run, so this cannot loop or trip the prod
+          # reviewer gate.
+          push() { git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $AUTH" push -q origin "HEAD:$REF"; }
+          if push; then echo "refreshed $ENV v$VERSION (docs @ $PUBLISHED_SHA)"; exit 0; fi
+          # Rejected: something landed on $REF meanwhile. NEVER re-seal here (review [8]): re-sealing the old
+          # content on the new tip would publish it ABOVE a publish that just landed and revert that change for good.
+          git fetch -q origin "$REF"
+          if git diff --quiet HEAD~1 "origin/$REF" -- published/; then
+            # No mirror commit landed (only docs/other files moved, e.g. a push whose publish has not sealed yet), so
+            # every mirror on the branch is still below v$VERSION: replay the one refresh commit on the new tip.
+            git rebase -q "origin/$REF"
+            if push; then echo "refreshed $ENV v$VERSION (docs @ $PUBLISHED_SHA; replayed on the new tip)"; exit 0; fi
+            echo "::error::the refreshed mirror could not be pushed to $REF — re-run the refresh"
+            exit 1
+          fi
+          git show "origin/$REF:published/$ENV/v1/bundle.json" > "$RUNNER_TEMP/tip-bundle.json"
+          TIP_SHA=$(node "$RUNNER_TEMP/pinned-verify.mjs" "$RUNNER_TEMP/tip-bundle.json" --doc bundle --env "$ENV" --print git-sha)
+          if [ "$TIP_SHA" != "$PUBLISHED_SHA" ]; then
+            echo "::notice::a publish landed on $REF meanwhile (docs @ $TIP_SHA) — this refresh of $PUBLISHED_SHA is dropped, nothing of it is uploaded (the upload job uploads the tip mirror)"
+            exit 0
+          fi
+          echo "::error::another mirror commit of the same content landed on $REF meanwhile — re-run the refresh"
           exit 1
-      # AFTER the mirror push (see `publish` for why).
-      - name: Publish alerts-policy → data bucket (R2)
+
+  # The refresh's uploads, one leg per env (see publish-upload). Each leg uploads its branch's TIP mirror — never the
+  # refresh job's own sealed files — so a refresh that was dropped (a publish landed meanwhile) or failed uploads
+  # nothing stale: config-tool skips when the tip mirror is already live, and never overwrites a newer version.
+  refresh-upload:
+    needs: refresh
+    if: ${{ !cancelled() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    environment: ${{ matrix.env == 'prod' && 'prod-refresh' || matrix.env }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { env: dev, ref: dev }
+          - { env: staging, ref: staging }
+          - { env: prod, ref: main }
+    concurrency: { group: "config-upload-${{ matrix.env }}", cancel-in-progress: false }
+    env:
+      ENV: ${{ matrix.env }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with: { ref: "${{ matrix.ref }}", persist-credentials: false }
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with: { node-version: '22' }
+      # Uses the env branch's own tools/config-tool.mjs (dev's for dev, …): a tool change lands dev → staging → main,
+      # so every branch already has a tool that understands these flags by the time main's workflow calls it.
+      - name: Upload the tip mirror (alerts policy → data bucket; bundle → config bucket + KV + public data copy)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          npx --yes wrangler@4.136.0 r2 object put "shelter-data-$ENV/alerts/policy.json" \
-            --file "published/$ENV/v1/alerts/policy.json" --remote --content-type application/json
-      # The config bundle, exactly as in `publish`. Uses the branch-tip tool: the upload holds no signing key and only
-      # copies bytes that verify under the embedded keyring (the tip is as trusted as this workflow file itself).
-      - name: Publish the config bundle → config bucket + KV + public data copy
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: node tools/config-tool.mjs publish "published/$ENV/v1/" --env "$ENV" --r2 --then-kv --data-copy
+        run: node tools/config-tool.mjs publish "published/$ENV/v1/" --env "$ENV" --policy --r2 --then-kv --data-copy
