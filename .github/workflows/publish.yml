@@ -1,6 +1,12 @@
 # TheShelterApp/config — validate on PR, publish per branch → env on push, and a freshness heartbeat.
 # The signer is the bundled tools/config-tool.mjs (self-contained; no registry needed).
-# Secret: CONFIG_ED25519_PRIVATE (PKCS#8 PEM). The `prod` environment requires 1 reviewer.
+#
+# Keys (platform plan D-8, contract C6): secret CONFIG_ED25519_PRIVATE (PKCS#8 PEM) + variable CONFIG_KID (its kid,
+# default cfg-2026a). dev/staging use the REPO-level secret (cfg-2026a); the `prod` and `prod-refresh` environments
+# carry their own secret + CONFIG_KID (cfg-2026c after owner step O-4). A kid must already be trusted by every
+# consumer (platform keyring, iOS EmbeddedKeys, tools/verify-envelope.mjs) before anything signs with it.
+# Uploads use CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID (environment secrets of dev/staging/prod/prod-refresh).
+# The `prod` environment requires 1 reviewer; `prod-refresh` (scheduled re-seal of already-approved content) does not.
 #
 # Invariants this file relies on — DO NOT rewrite the history of dev/staging/main: the sealed version is the commit
 # count of the branch tip (monotonic only while history is append-only), and the published `gitSha` must stay
@@ -14,7 +20,7 @@ on:
     paths: ['docs/**', 'tools/**', '.github/workflows/**']
   schedule:
     # Freshness heartbeat (the `refresh` job below). GitHub runs `schedule` ONLY from the workflow file on the
-    # DEFAULT branch (dev) — so this file is kept identical on dev/staging/main and the job checks out each
+    # DEFAULT branch (`main`) — so this file is kept identical on dev/staging/main and the job checks out each
     # env's branch itself. Twice a week keeps every signed doc far inside its max-age (bundle 30 d, policy
     # 90 d) even if a run or two is missed, and the mirror commit keeps the repo "active" (GitHub disables
     # schedules on a public repo after 60 days without activity).
@@ -69,9 +75,10 @@ jobs:
             exit 1
           fi
           node tools/config-tool.mjs validate docs/
-      - name: Seal (JCS + Ed25519), commit the mirror, push — retried if a refresh lands meanwhile
+      - name: Seal (JCS + Ed25519), self-check, commit the mirror, push — retried if a refresh lands meanwhile
         env:
           CONFIG_ED25519_PRIVATE: ${{ secrets.CONFIG_ED25519_PRIVATE }}
+          CONFIG_KID: ${{ vars.CONFIG_KID || 'cfg-2026a' }}
         run: |
           set -euo pipefail
           git config user.name config-bot
@@ -79,10 +86,15 @@ jobs:
           for attempt in 1 2 3; do
             # Version = commit count of the TIP: strictly above every earlier publish/refresh on this branch.
             VERSION=$(git rev-list --count HEAD)
-            node tools/config-tool.mjs seal docs/ --env "$ENV" --version "$VERSION" --git-sha "$GITHUB_SHA" --kid cfg-2026a --out "published/$ENV/v1/"
+            node tools/config-tool.mjs seal docs/ --env "$ENV" --version "$VERSION" --git-sha "$GITHUB_SHA" --kid "$CONFIG_KID" --out "published/$ENV/v1/"
             # --max-age 90d: a stable policy must not silently expire between infrequent edits; the `refresh`
             # heartbeat below keeps it fresh well inside that. An expiry is observable in the gateway's status.json.
-            node tools/config-tool.mjs seal-policy docs/alerts-policy.json --env "$ENV" --version "$VERSION" --kid cfg-2026a --max-age 7776000 --out "published/$ENV/v1/"
+            node tools/config-tool.mjs seal-policy docs/alerts-policy.json --env "$ENV" --version "$VERSION" --kid "$CONFIG_KID" --max-age 7776000 --out "published/$ENV/v1/"
+            # Self-check BEFORE anything leaves the runner: every sealed file must verify under a kid the clients trust
+            # (a secret that does not match CONFIG_KID fails here, not on devices).
+            node tools/verify-envelope.mjs "published/$ENV/v1/bundle.json" --doc bundle --env "$ENV" --kid "$CONFIG_KID"
+            node tools/verify-envelope.mjs "published/$ENV/v1/alerts/policy.json" --doc alerts-policy --env "$ENV" --kid "$CONFIG_KID"
+            node tools/config-tool.mjs publish "published/$ENV/v1/" --env "$ENV" --r2 --then-kv --data-copy --dry-run > /dev/null
             git add published/
             if git diff --cached --quiet -- published/; then echo "no change to publish"; exit 0; fi
             # Path-limited commit: only the mirror, never anything else that happens to be in the index.
@@ -109,24 +121,35 @@ jobs:
           npx --yes wrangler@4.136.0 r2 object put "shelter-data-$ENV/alerts/policy.json" \
             --file "published/$ENV/v1/alerts/policy.json" --remote --content-type application/json
           echo "uploaded alerts-policy → shelter-data-$ENV/alerts/policy.json"
-      # The config BUNDLE publish (config bucket + KV, for config.theshelter.app) is separate (PF-07/08):
-      #   node tools/config-tool.mjs publish published/$ENV/v1/ --r2 --then-kv
+      # The config BUNDLE: shelter-config-<env> R2 (v1/<doc>.json + immutable v1/history/<doc>/<version>.json), then
+      # KV v1:<doc> with {version,kid} metadata (what config[-env].theshelter.app serves), then the public static copy
+      # shelter-data-<env>/config/v1/bundle.json (max-age=300) the app fetches first (contract C7). config-tool verifies
+      # every file against its embedded keyring before the first upload; the upload itself is idempotent.
       # ROLLBACK: signed-policy replay is closed by a consumer-side version floor in the gateway (detector DO),
       # not here — see the alerts-gateway. This job only publishes owner-approved (or scheduled-refresh) content.
+      - name: Publish the config bundle → config bucket + KV + public data copy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node tools/config-tool.mjs publish "published/$ENV/v1/" --env "$ENV" --r2 --then-kv --data-copy
 
   # Unattended freshness: re-seal the LAST PUBLISHED content of every env with a fresh generatedAt, so a stable,
   # rarely-edited config never silently expires (an expired BUNDLE strands fresh installs on the compiled
   # default and blocks kill-switch delivery; an expired POLICY drops the gateway to the restrictive fallback).
-  # NO `environment:` gate, and it is safe without one: the content is NOT the branch HEAD but the docs (and the
-  # signing tool) at the `gitSha` recorded inside the currently published bundle — whose SIGNATURE is verified
-  # first, and which must be an ancestor of this branch — i.e. exactly what was last approved and published.
-  # A push that is still waiting on the prod reviewer, an edited bundle.json, or a foreign commit can therefore
-  # never be released by the schedule. The version (commit count) only grows, so consumer version floors accept it.
+  # No REVIEWER gate, and it is safe without one: the content is NOT the branch HEAD but the docs (and the signing
+  # tool) at the `gitSha` recorded inside the currently published bundle — whose SIGNATURE is verified first, and
+  # which must be an ancestor of this branch — i.e. exactly what was last approved and published. A push that is
+  # still waiting on the prod reviewer, an edited bundle.json, or a foreign commit can therefore never be released by
+  # the schedule. The version (commit count) only grows, so consumer version floors accept it.
+  # Each leg runs in an environment only so it can read that env's secrets/variables: `prod-refresh` (no reviewer,
+  # branch main) for prod, `dev` / `staging` for the others. Keyed on the MATRIX, not github.ref_name — a scheduled
+  # run's ref is always main, which would hand the prod key to the dev/staging legs.
   refresh:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    environment: ${{ matrix.ref == 'main' && 'prod-refresh' || matrix.env }}
     strategy:
       fail-fast: false
       matrix:
@@ -149,31 +172,19 @@ jobs:
       - name: Locate the last published (reviewed) content — signature-verified
         run: |
           set -euo pipefail
-          # Trust the gitSha ONLY if the published bundle verifies under the cfg-2026a PUBLIC key (the same key
-          # every client embeds) and is the bundle for THIS env. Expiry is deliberately NOT checked here — an
-          # expired bundle is exactly what this job must rescue.
-          PUBLISHED_SHA=$(node -e '
-            const fs = require("fs"), crypto = require("crypto");
-            const env = process.argv[1];
-            const e = JSON.parse(fs.readFileSync(`published/${env}/v1/bundle.json`, "utf8"));
-            if (e.kid !== "cfg-2026a") throw new Error(`unexpected kid ${e.kid}`);
-            const raw = Buffer.from("JFJqkUuyDkKVkZupAwfSRc+X2Nn82I3kkSxsxlApyJA=", "base64");
-            const spki = Buffer.concat([Buffer.from("302a300506032b6570032100", "hex"), raw]);
-            const payload = Buffer.from(e.payload, "base64"), sig = Buffer.from(e.sig, "base64");
-            if (!crypto.verify(null, payload, { key: spki, format: "der", type: "spki" }, sig)) throw new Error("published bundle signature does NOT verify — refusing to trust its gitSha");
-            const d = JSON.parse(payload.toString("utf8"));
-            if (d.doc !== "bundle" || d.env !== env) throw new Error(`published bundle is ${d.doc}/${d.env}, expected bundle/${env}`);
-            if (!/^[0-9a-f]{40}$/.test(d.gitSha) || /^0+$/.test(d.gitSha)) throw new Error("published bundle carries no usable gitSha");
-            console.log(d.gitSha);
-          ' "$ENV")
+          # Trust the gitSha ONLY if the published bundle verifies under one of the env's trusted PUBLIC keys (the
+          # C6 set every client embeds: cfg-2026a/b/c — tools/verify-envelope.mjs) and is the bundle for THIS env.
+          # Expiry is deliberately NOT checked here — an expired bundle is exactly what this job must rescue.
+          PUBLISHED_SHA=$(node tools/verify-envelope.mjs "published/$ENV/v1/bundle.json" --doc bundle --env "$ENV" --print git-sha)
           git cat-file -e "$PUBLISHED_SHA^{commit}"
           # Must be on THIS branch's own history: a sha from another branch cannot be smuggled in via bundle.json.
           git merge-base --is-ancestor "$PUBLISHED_SHA" HEAD || { echo "::error::published gitSha $PUBLISHED_SHA is not an ancestor of $REF"; exit 1; }
           echo "PUBLISHED_SHA=$PUBLISHED_SHA" >> "$GITHUB_ENV"
           echo "last published $ENV content is docs @ $PUBLISHED_SHA"
-      - name: Re-seal from the published sha (docs AND tool), commit the mirror, push — retried on a race
+      - name: Re-seal from the published sha (docs AND tool), self-check, commit the mirror, push — retried on a race
         env:
           CONFIG_ED25519_PRIVATE: ${{ secrets.CONFIG_ED25519_PRIVATE }}
+          CONFIG_KID: ${{ vars.CONFIG_KID || 'cfg-2026a' }}
         run: |
           set -euo pipefail
           # Extract docs/ and tools/ at the published sha into a scratch dir — the worktree is never mutated, so a
@@ -186,8 +197,12 @@ jobs:
           git config user.email bot@users.noreply.github.com
           for attempt in 1 2 3; do
             VERSION=$(git rev-list --count HEAD)
-            node "$SRC/tools/config-tool.mjs" seal "$SRC/docs/" --env "$ENV" --version "$VERSION" --git-sha "$PUBLISHED_SHA" --kid cfg-2026a --out "published/$ENV/v1/"
-            node "$SRC/tools/config-tool.mjs" seal-policy "$SRC/docs/alerts-policy.json" --env "$ENV" --version "$VERSION" --kid cfg-2026a --max-age 7776000 --out "published/$ENV/v1/"
+            node "$SRC/tools/config-tool.mjs" seal "$SRC/docs/" --env "$ENV" --version "$VERSION" --git-sha "$PUBLISHED_SHA" --kid "$CONFIG_KID" --out "published/$ENV/v1/"
+            node "$SRC/tools/config-tool.mjs" seal-policy "$SRC/docs/alerts-policy.json" --env "$ENV" --version "$VERSION" --kid "$CONFIG_KID" --max-age 7776000 --out "published/$ENV/v1/"
+            # Self-check with the branch-tip verifiers (they never see the signing key): see `publish`.
+            node tools/verify-envelope.mjs "published/$ENV/v1/bundle.json" --doc bundle --env "$ENV" --kid "$CONFIG_KID"
+            node tools/verify-envelope.mjs "published/$ENV/v1/alerts/policy.json" --doc alerts-policy --env "$ENV" --kid "$CONFIG_KID"
+            node tools/config-tool.mjs publish "published/$ENV/v1/" --env "$ENV" --r2 --then-kv --data-copy --dry-run > /dev/null
             git add published/
             if git diff --cached --quiet -- published/; then echo "nothing to refresh"; exit 0; fi
             git commit -q -m "refresh $ENV v$VERSION" -- published/
@@ -211,3 +226,10 @@ jobs:
         run: |
           npx --yes wrangler@4.136.0 r2 object put "shelter-data-$ENV/alerts/policy.json" \
             --file "published/$ENV/v1/alerts/policy.json" --remote --content-type application/json
+      # The config bundle, exactly as in `publish`. Uses the branch-tip tool: the upload holds no signing key and only
+      # copies bytes that verify under the embedded keyring (the tip is as trusted as this workflow file itself).
+      - name: Publish the config bundle → config bucket + KV + public data copy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node tools/config-tool.mjs publish "published/$ENV/v1/" --env "$ENV" --r2 --then-kv --data-copy
