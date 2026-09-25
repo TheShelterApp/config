@@ -19339,6 +19339,9 @@ function buildPolicySchema(strict) {
     maxAlertAgeSec: external_exports.int().min(1),
     radiusByMagnitude: external_exports.array(external_exports.tuple([external_exports.number(), external_exports.number()])).min(1),
     cellMarginKm: external_exports.number().min(0),
+    // Optional (WP-1.3): the alert radius an event must reach before an IP-derived device cell is alerted.
+    // Absent → IP_CELL_MIN_RADIUS_KM, so a signed policy that predates the field keeps its meaning.
+    ipCellMinRadiusKm: external_exports.number().min(0).optional(),
     tiers: external_exports.array(tier).min(1),
     quietHoursOverrides: external_exports.array(obj({ minMag: external_exports.number(), maxKm: external_exports.number() })),
     revision: obj({ magDelta: external_exports.number().min(0), tsunamiFlip: external_exports.boolean() }),
