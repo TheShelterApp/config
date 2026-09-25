@@ -19223,6 +19223,10 @@ var noticeSchema = external_exports.strictObject({
   until_epoch_sec: external_exports.int().min(0).optional()
 });
 var killSwitchesShape = {
+  /** @deprecated retired (plan D-17) — kept only for pre-round-3 iOS decoders; see above. */
+  push_alerts: external_exports.boolean().optional(),
+  /** @deprecated retired (plan D-17) — kept only for pre-round-3 iOS decoders; see above. */
+  live_activities: external_exports.boolean().optional(),
   feed_disabled: external_exports.boolean(),
   community_write_mode: external_exports.enum(COMMUNITY_WRITE_MODES),
   usgs_submit: external_exports.boolean(),
@@ -19386,24 +19390,25 @@ var RETIRED_KILL_SWITCHES = {
 };
 function validate2(docs) {
   const errors = [];
+  const warnings = [];
   const ks = docs["kill-switches"];
   if (ks && typeof ks === "object") {
     for (const [field, replacement] of Object.entries(RETIRED_KILL_SWITCHES)) {
-      if (field in ks) errors.push(`kill-switches: ${field} was retired (plan D-17) \u2014 delete it; the push authority is ${replacement}`);
+      if (field in ks) warnings.push(`kill-switches: ${field} is retired (plan D-17) and read by nothing but pre-round-3 iOS builds, which still require it \u2014 delete it once no such build is installed; the push authority is ${replacement}`);
     }
   }
   for (const name of DOC_NAMES) {
     const res = docContentSchemas[name].safeParse(docs[name]);
     if (!res.success) for (const issue2 of res.error.issues) errors.push(`${name}: ${issue2.path.join(".")} ${issue2.message}`);
   }
-  if (errors.length > 0) return { errors };
+  if (errors.length > 0) return { errors, warnings };
   const probe = buildBundle(docs, { env: "dev", version: 1, generatedAt: (/* @__PURE__ */ new Date(0)).toISOString(), maxAgeSeconds: 604800, gitSha: "0".repeat(40) });
   try {
     errors.push(...crossDocErrors(parseBundle(probe)));
   } catch (e) {
     errors.push(`bundle: ${e.message}`);
   }
-  return { errors };
+  return { errors, warnings };
 }
 function buildBundle(docs, h) {
   return { doc: "bundle", env: h.env, version: h.version, generatedAt: h.generatedAt, maxAgeSeconds: h.maxAgeSeconds, gitSha: h.gitSha, schema: SCHEMA_URL, docs };
@@ -19477,6 +19482,7 @@ ${m.privateKeyPkcs8Base64.match(/.{1,64}/g).join("\n")}
 }
 
 // packages/config-tool/src/publish.ts
+init_src();
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 var PUBLISH_DOCS = ["bundle", ...DOC_NAMES];
@@ -19489,6 +19495,8 @@ var configBucket = (env) => `shelter-config-${env}`;
 var dataBucket = (env) => `shelter-data-${env}`;
 var DATA_COPY_KEY = "config/v1/bundle.json";
 var DATA_COPY_CACHE_CONTROL = "public, max-age=300";
+var POLICY_FILE = join("alerts", "policy.json");
+var POLICY_KEY = "alerts/policy.json";
 var DEFAULT_WRANGLER = ["npx", "--yes", "wrangler@4.136.0"];
 function loadPublished(dir) {
   return PUBLISH_DOCS.map((doc) => {
@@ -19524,6 +19532,33 @@ async function inspectPublished(files, env, now, trusted) {
   }
   return { version: version2, kid };
 }
+function loadPolicy(dir) {
+  const path = join(dir, POLICY_FILE);
+  return { path, bytes: new Uint8Array(readFileSync(path)) };
+}
+async function inspectPolicy(file2, env, now, trusted) {
+  const verifier = trusted ?? await verifierFor("config", EMBEDDED_KEYRING[env].config ?? []);
+  let envelope;
+  try {
+    envelope = JSON.parse(new TextDecoder().decode(file2.bytes));
+  } catch (e) {
+    throw new Error(`publish: ${file2.path} is not JSON (${e.message})`);
+  }
+  if (!verifier.kids.includes(envelope.kid)) throw new Error(`publish: ${file2.path} is signed by kid ${envelope.kid}, which the ${env} keyring does not trust (${verifier.kids.join(", ")})`);
+  let payload;
+  try {
+    payload = await open(verifier, envelope, { expectDoc: "alerts-policy", expectEnv: env, now, minVersion: 1 });
+  } catch (e) {
+    throw new Error(`publish: ${file2.path} does not verify as alerts-policy/${env} (${e.message})`);
+  }
+  if (!Number.isInteger(payload.version) || payload.version < 1) throw new Error(`publish: ${file2.path} carries no usable version`);
+  return { version: payload.version, kid: envelope.kid };
+}
+function planPolicy(input2) {
+  const w = input2.wrangler ?? DEFAULT_WRANGLER;
+  const target = `${dataBucket(input2.env)}/${POLICY_KEY}`;
+  return [{ label: `r2 ${target}`, argv: [...w, "r2", "object", "put", target, "--file", input2.file.path, "--content-type", "application/json", "--remote"] }];
+}
 function planPublish(input2) {
   const w = input2.wrangler ?? DEFAULT_WRANGLER;
   const { env, version: version2, kid } = input2;
@@ -19557,6 +19592,52 @@ function planPublish(input2) {
   }
   return steps;
 }
+var liveReadArgv = (wrangler, objectPath) => [...wrangler, "r2", "object", "get", objectPath, "--remote", "--pipe"];
+async function readLive(input2) {
+  const res = await input2.runner(liveReadArgv(input2.wrangler ?? DEFAULT_WRANGLER, input2.objectPath));
+  if (res.code !== 0) {
+    const out = `${res.stderr}
+${res.stdout}`;
+    if (/specified key does not exist/i.test(out)) return { state: "absent" };
+    const tail = out.trim().split("\n").slice(-5).join("\n");
+    throw new Error(`publish: could not read the live ${input2.objectPath} (exit ${res.code}):
+${tail}`);
+  }
+  let envelope;
+  try {
+    envelope = JSON.parse(res.stdout);
+  } catch {
+    return { state: "unverified", reason: "not JSON" };
+  }
+  let body;
+  try {
+    body = decodeJsonPayload(await openBytes(input2.verifier, envelope));
+  } catch (e) {
+    return { state: "unverified", reason: e.message || e.name };
+  }
+  if (body.doc !== input2.doc || body.env !== input2.env) return { state: "unverified", reason: `it is ${String(body.doc)}/${String(body.env)}` };
+  if (typeof body.version !== "number" || !Number.isInteger(body.version) || body.version < 1) return { state: "unverified", reason: "no usable version" };
+  return { state: "verified", version: body.version, kid: envelope.kid };
+}
+var liveNote = (label, live) => live.state === "verified" ? `${label} v${live.version}` : live.state === "absent" ? `no ${label}` : `unverifiable ${label} (${live.reason})`;
+function decideBundleUpload(local, targets, liveR2, liveDataCopy) {
+  const versions = [liveR2, liveDataCopy].flatMap((l) => l?.state === "verified" ? [l.version] : []);
+  const newest = versions.length ? Math.max(...versions) : void 0;
+  const seen = [liveNote("live bundle", liveR2), ...liveDataCopy ? [liveNote("public copy", liveDataCopy)] : []].join(", ");
+  if (newest !== void 0 && newest > local) return { upload: false, newerLive: true, reason: `live v${newest} >= local v${local} \u2014 a newer bundle is already live, nothing uploaded (${seen})` };
+  const r2 = liveR2.state === "verified" ? liveR2.version : void 0;
+  const last = targets.dataCopy ? liveDataCopy : targets.kv ? void 0 : liveR2;
+  const complete = r2 === local && last?.state === "verified" && last.version >= local;
+  if (complete) return { upload: false, newerLive: false, reason: `live v${local} >= local v${local} \u2014 already published, nothing uploaded` };
+  return { upload: true, newerLive: false, reason: r2 === local ? `live v${local} == local v${local} \u2014 re-writing it (an earlier publish of it did not complete)` : `${seen} \u2192 uploading v${local}` };
+}
+function decidePolicyUpload(local, live) {
+  if (live.state === "verified" && live.version >= local) {
+    const newerLive = live.version > local;
+    return { upload: false, newerLive, reason: `live v${live.version} >= local v${local} \u2014 ${newerLive ? "a newer policy is already live" : "already published"}, nothing uploaded` };
+  }
+  return { upload: true, newerLive: false, reason: `${liveNote("live policy", live)} \u2192 uploading v${local}` };
+}
 async function runPublish(steps, runner, log = () => {
 }) {
   for (const [i, step] of steps.entries()) {
@@ -19569,17 +19650,61 @@ ${tail}`);
     log(`ok ${i + 1}/${steps.length} ${step.label}`);
   }
 }
+async function preparePublish(input2) {
+  const { dir, env, targets, now } = input2;
+  const verifier = input2.verifier ?? await verifierFor("config", EMBEDDED_KEYRING[env].config ?? []);
+  const out = { env };
+  if (targets.policy) {
+    const file2 = loadPolicy(dir);
+    const meta3 = await inspectPolicy(file2, env, now, verifier);
+    out.policy = { ...meta3, steps: planPolicy({ env, file: file2, wrangler: input2.wrangler }) };
+  }
+  if (targets.r2 || targets.kv || targets.dataCopy) {
+    const files = loadPublished(dir);
+    const meta3 = await inspectPublished(files, env, now, verifier);
+    out.bundle = { ...meta3, steps: planPublish({ env, files, ...meta3, targets, wrangler: input2.wrangler }) };
+  }
+  return out;
+}
+async function publishDir(input2) {
+  const log = input2.log ?? (() => {
+  });
+  const { env, targets, runner } = input2;
+  const verifier = input2.verifier ?? await verifierFor("config", EMBEDDED_KEYRING[env].config ?? []);
+  const prepared = await preparePublish({ ...input2, verifier });
+  const read = (objectPath, doc) => readLive({ runner, wrangler: input2.wrangler, objectPath, doc, env, verifier });
+  const outcome = {};
+  if (prepared.policy) {
+    const decision = decidePolicyUpload(prepared.policy.version, await read(`${dataBucket(env)}/${POLICY_KEY}`, "alerts-policy"));
+    log(`alerts-policy: ${decision.reason}`);
+    if (decision.upload) await runPublish(prepared.policy.steps, runner, log);
+    outcome.policy = decision;
+  }
+  if (prepared.bundle) {
+    const liveR2 = await read(`${configBucket(env)}/v1/bundle.json`, "bundle");
+    const liveCopy = targets.dataCopy ? await read(`${dataBucket(env)}/${DATA_COPY_KEY}`, "bundle") : void 0;
+    const decision = decideBundleUpload(prepared.bundle.version, targets, liveR2, liveCopy);
+    log(`bundle: ${decision.reason}`);
+    if (decision.upload) await runPublish(prepared.bundle.steps, runner, log);
+    outcome.bundle = decision;
+  }
+  return outcome;
+}
+function shellQuote(arg) {
+  return /^[A-Za-z0-9_/.:=@+-]+$/.test(arg) ? arg : `'${arg.replace(/'/g, `'\\''`)}'`;
+}
+var formatArgv = (argv) => argv.map(shellQuote).join(" ");
 function parsePublishArgs(args) {
   const dir = args[0];
-  if (!dir || dir.startsWith("--")) throw new Error('usage: config-tool publish <published/<env>/v1/> --env <dev|staging|prod> [--r2] [--then-kv] [--data-copy] [--dry-run] [--wrangler "<cmd>"]');
+  if (!dir || dir.startsWith("--")) throw new Error('usage: config-tool publish <published/<env>/v1/> --env <dev|staging|prod> [--policy] [--r2] [--then-kv] [--data-copy] [--dry-run] [--wrangler "<cmd>"]');
   const opt = (k) => {
     const i = args.indexOf(`--${k}`);
     return i >= 0 ? args[i + 1] : void 0;
   };
   const env = opt("env");
   if (env !== "dev" && env !== "staging" && env !== "prod") throw new Error("--env must be dev|staging|prod");
-  const targets = { r2: args.includes("--r2"), kv: args.includes("--then-kv"), dataCopy: args.includes("--data-copy") };
-  if (!targets.r2 && !targets.kv && !targets.dataCopy) throw new Error("nothing to publish: pass at least one of --r2, --then-kv, --data-copy");
+  const targets = { policy: args.includes("--policy"), r2: args.includes("--r2"), kv: args.includes("--then-kv"), dataCopy: args.includes("--data-copy") };
+  if (!targets.policy && !targets.r2 && !targets.kv && !targets.dataCopy) throw new Error("nothing to publish: pass at least one of --policy, --r2, --then-kv, --data-copy");
   const w = opt("wrangler");
   const wrangler = w ? w.split(/\s+/).filter(Boolean) : DEFAULT_WRANGLER;
   if (wrangler.length === 0) throw new Error("--wrangler must name a command");
@@ -19587,6 +19712,7 @@ function parsePublishArgs(args) {
 }
 
 // packages/config-tool/src/cli.ts
+var annotate = (level2, message) => process.env.GITHUB_ACTIONS === "true" ? `::${level2}::${message}` : `${level2.toUpperCase()}: ${message}`;
 var spawnRunner = (argv) => new Promise((resolve) => {
   const child = spawn(argv[0], argv.slice(1), { stdio: ["ignore", "pipe", "pipe"], env: process.env });
   let stdout = "";
@@ -19606,7 +19732,8 @@ async function main() {
   const [cmd, ...args] = process.argv.slice(2);
   if (cmd === "validate") {
     const dir = args[0] ?? "docs";
-    const { errors } = validate2(readDocs(dir));
+    const { errors, warnings } = validate2(readDocs(dir));
+    for (const w of warnings) console.error(annotate("warning", w));
     const policyPath = join2(dir, "alerts-policy.json");
     if (existsSync(policyPath)) errors.push(...validatePolicy(JSON.parse(readFileSync2(policyPath, "utf8"))).errors);
     if (errors.length) {
@@ -19681,16 +19808,19 @@ async function main() {
       console.error(e.message);
       process.exit(2);
     }
-    const files = loadPublished(parsed.dir);
-    const { version: version2, kid } = await inspectPublished(files, parsed.env, Date.now());
-    const steps = planPublish({ env: parsed.env, files, version: version2, kid, targets: parsed.targets, wrangler: parsed.wrangler });
-    console.log(`publish ${parsed.env} v${version2} (kid ${kid}): ${steps.length} step(s)${parsed.dryRun ? " \u2014 dry run, nothing uploaded" : ""}`);
+    const { env, targets, wrangler } = parsed;
     if (parsed.dryRun) {
-      for (const step of steps) console.log(`  ${step.argv.join(" ")}`);
+      const plan = await preparePublish({ dir: parsed.dir, env, targets, wrangler, now: Date.now() });
+      const parts = [plan.policy && `alerts-policy v${plan.policy.version} (kid ${plan.policy.kid})`, plan.bundle && `bundle v${plan.bundle.version} (kid ${plan.bundle.kid})`].filter(Boolean);
+      const steps = [...plan.policy?.steps ?? [], ...plan.bundle?.steps ?? []];
+      console.log(`publish ${env}: ${parts.join(" + ")}: ${steps.length} step(s) \u2014 dry run, nothing uploaded; a real run first reads the live versions and skips anything not newer`);
+      for (const step of steps) console.log(`  ${formatArgv(step.argv)}`);
       return;
     }
-    await runPublish(steps, spawnRunner, (line) => console.log(line));
-    console.log(`published ${parsed.env} v${version2}`);
+    const outcome = await publishDir({ dir: parsed.dir, env, targets, wrangler, now: Date.now(), runner: spawnRunner, log: (line) => console.log(line) });
+    for (const d of [outcome.policy, outcome.bundle]) if (d?.newerLive) console.log(annotate("notice", `${env}: ${d.reason}`));
+    const uploaded = [outcome.policy?.upload && "alerts-policy", outcome.bundle?.upload && "bundle"].filter(Boolean);
+    console.log(uploaded.length ? `published ${env}: ${uploaded.join(" + ")}` : `nothing uploaded for ${env} (the live versions are not older)`);
   } else {
     console.error("usage: config-tool <validate|seal|seal-policy|verify|keygen|publish> \u2026");
     process.exit(2);
