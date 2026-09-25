@@ -2,6 +2,8 @@
   "feed_disabled": false,
   "community_write_mode": "normal",
   "usgs_submit": true,
+  "live_activities": true,
+  "push_alerts": true,
   "direct_origins_provider_allowlist": [
     "usgs",
     "emsc"
