@@ -29,5 +29,11 @@
   "tiles": {
     "bundleVersion": "bundle-v1",
     "cdnPrefix": "/tiles/"
+  },
+  "regions_db": {
+    "version": "1.0.0",
+    "url": "https://github.com/TheShelterApp/region-tiles/releases/download/bundle-v1/regions.sqlite.gz",
+    "size_bytes": 40337310,
+    "sha256": "f14b777271b11d4b720547430d89e0e952576b5017502e99a817d8f757a6b18f"
   }
 }
