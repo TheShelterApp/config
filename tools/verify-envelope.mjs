@@ -7,7 +7,10 @@
 //        [--kid <expected kid>] [--print git-sha|version|kid]
 //
 // TRUSTED is the config trust set per env (platform contract C6, packages/domain/src/keyring.ts). Update it together
-// with the platform keyring and the iOS EmbeddedKeys — never trust a kid here before the clients do.
+// with the platform keyring, the iOS EmbeddedKeys and PINNED_VERIFY_MJS in .github/workflows/publish.yml (CI does
+// not run this file — it uses that pinned copy) — never trust a kid here before the clients do.
+// FOLLOW-UP at owner step O-4: once the first cfg-2026c prod publish has landed, drop cfg-2026a from TRUSTED.prod
+// here and in the workflow's pinned verifier (cfg-2026a is readable by the unreviewed dev/staging jobs).
 import { verify } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 
