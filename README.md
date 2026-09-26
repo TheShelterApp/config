@@ -64,8 +64,8 @@ a bundle whose earlier publish of the same version stopped halfway is re-written
 | kid | role | where the private half lives |
 |---|---|---|
 | `cfg-2026a` | dev/staging signer (and prod until the switch) | repo-level secret `CONFIG_ED25519_PRIVATE` |
-| `cfg-2026c` | prod signer after the switch | `prod` + `prod-refresh` environment secret `CONFIG_ED25519_PRIVATE`, variable `CONFIG_KID=cfg-2026c` |
-| `cfg-2026b` | offline standby | offline only — never uploaded until a rotation |
+| `cfg-2026d` | prod signer after the switch | `prod` + `prod-refresh` environment secret `CONFIG_ED25519_PRIVATE`, variable `CONFIG_KID=cfg-2026d` |
+| `cfg-2026e` | standby | the owner's Apple Passwords only — never uploaded until a rotation |
 
 The workflow signs with `--kid ${{ vars.CONFIG_KID || 'cfg-2026a' }}`. Every consumer — the platform keyring
 (`packages/domain/src/keyring.ts`), the iOS `EmbeddedKeys`, the workflow's pinned verifier (`PINNED_VERIFY_MJS` in
@@ -74,9 +74,10 @@ it. Before each mirror push, CI self-checks every freshly sealed file with the p
 `CONFIG_KID`, version the one just sealed) — and, in `publish`, with the approved tool's `publish --dry-run` — in a
 step without the key, so a secret that does not match `CONFIG_KID` fails the job instead of reaching devices. The
 `refresh` trust check accepts a published bundle signed by any kid of the env's trusted set: today
-{cfg-2026a, cfg-2026b, cfg-2026c} for every env.
+{cfg-2026a, cfg-2026d, cfg-2026e} for every env (re-keyed 2026-09-26: cfg-2026b/c were lost with an
+unopenable encrypted volume before they signed anything and are no longer trusted).
 
-**Follow-up at owner step O-4:** as soon as the first `cfg-2026c` prod publish has landed on `main`, remove
+**Follow-up at owner step O-4:** as soon as the first `cfg-2026d` prod publish has landed on `main`, remove
 `cfg-2026a` from `TRUSTED.prod` in the workflow's `PINNED_VERIFY_MJS` and in `tools/verify-envelope.mjs` (one
 commit, dev → staging → main). Until then the prod refresh accepts a `cfg-2026a`-signed prod mirror, and
 `cfg-2026a` is readable by the unreviewed dev/staging jobs.
