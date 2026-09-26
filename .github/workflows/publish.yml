@@ -26,13 +26,13 @@
 #
 # Keys (platform plan D-8, contract C6): secret CONFIG_ED25519_PRIVATE (PKCS#8 PEM) + variable CONFIG_KID (its kid,
 # default cfg-2026a). dev/staging use the REPO-level secret (cfg-2026a); the `prod` and `prod-refresh` environments
-# carry their own secret + CONFIG_KID (cfg-2026c after owner step O-4). A kid must already be trusted by every
+# carry their own secret + CONFIG_KID (cfg-2026d after owner step O-4). A kid must already be trusted by every
 # consumer (platform keyring, iOS EmbeddedKeys, PINNED_VERIFY_MJS below, tools/verify-envelope.mjs) before anything
 # signs with it.
-# FOLLOW-UP at owner step O-4: as soon as the first cfg-2026c prod publish has landed on main, remove cfg-2026a from
+# FOLLOW-UP at owner step O-4: as soon as the first cfg-2026d prod publish has landed on main, remove cfg-2026a from
 # TRUSTED.prod in PINNED_VERIFY_MJS and in tools/verify-envelope.mjs (one commit, dev → staging → main). Until then
 # the prod refresh accepts a cfg-2026a-signed prod mirror, and cfg-2026a is readable by the unreviewed dev/staging
-# jobs — so a forged prod mirror could steer what the prod-refresh job signs with cfg-2026c.
+# jobs — so a forged prod mirror could steer what the prod-refresh job signs with cfg-2026d.
 # Uploads use CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID (environment secrets of dev/staging/prod-refresh: both
 # prod upload jobs run in `prod-refresh`, so an approved prod publish needs no second approval to upload).
 #
@@ -72,14 +72,14 @@ env:
     import { readFileSync } from 'node:fs'
     const KEYS = {
       'cfg-2026a': 'JFJqkUuyDkKVkZupAwfSRc+X2Nn82I3kkSxsxlApyJA=',
-      'cfg-2026b': 'wb9HVx7ZRkU2VVO1xM9KA/AXjsIQHU3S2H9GIdFh0/g=',
-      'cfg-2026c': '5csqtamD1ZAFR5XneSDjPQ12sRGbdSGRnuDuB4sjqYA=',
+      'cfg-2026e': '7Fv27oGtbWUGmjFQCMiyJvHU3DKH+E+QPtb0Kxz8O+8=',
+      'cfg-2026d': 'W23ii85cHhsNpK/n9Z50ANHYHtpMJ0L0RjEFXx3q9vE=',
     }
-    // FOLLOW-UP (owner step O-4): after the first cfg-2026c prod publish, drop cfg-2026a from prod (see the header).
+    // FOLLOW-UP (owner step O-4): after the first cfg-2026d prod publish, drop cfg-2026a from prod (see the header).
     const TRUSTED = {
-      dev: ['cfg-2026a', 'cfg-2026b', 'cfg-2026c'],
-      staging: ['cfg-2026a', 'cfg-2026b', 'cfg-2026c'],
-      prod: ['cfg-2026a', 'cfg-2026b', 'cfg-2026c'],
+      dev: ['cfg-2026a', 'cfg-2026e', 'cfg-2026d'],
+      staging: ['cfg-2026a', 'cfg-2026e', 'cfg-2026d'],
+      prod: ['cfg-2026a', 'cfg-2026e', 'cfg-2026d'],
     }
     const args = process.argv.slice(2)
     const opt = (name) => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : undefined }
