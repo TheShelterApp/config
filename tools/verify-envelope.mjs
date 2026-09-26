@@ -9,7 +9,7 @@
 // TRUSTED is the config trust set per env (platform contract C6, packages/domain/src/keyring.ts). Update it together
 // with the platform keyring, the iOS EmbeddedKeys and PINNED_VERIFY_MJS in .github/workflows/publish.yml (CI does
 // not run this file — it uses that pinned copy) — never trust a kid here before the clients do.
-// FOLLOW-UP at owner step O-4: once the first cfg-2026d prod publish has landed, drop cfg-2026a from TRUSTED.prod
+// DONE 2026-09-26 (owner step O-4): cfg-2026a dropped from TRUSTED.prod once the first cfg-2026d prod publish landed
 // here and in the workflow's pinned verifier (cfg-2026a is readable by the unreviewed dev/staging jobs).
 import { verify } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -19,7 +19,9 @@ const C6 = {
   'cfg-2026e': '7Fv27oGtbWUGmjFQCMiyJvHU3DKH+E+QPtb0Kxz8O+8=',
   'cfg-2026d': 'W23ii85cHhsNpK/n9Z50ANHYHtpMJ0L0RjEFXx3q9vE=',
 }
-const TRUSTED = { dev: C6, staging: C6, prod: C6 }
+// prod no longer trusts cfg-2026a (done at owner step O-4, 2026-09-26: prod signs with cfg-2026d from v31).
+const PROD = Object.fromEntries(Object.entries(C6).filter(([kid]) => kid !== 'cfg-2026a'))
+const TRUSTED = { dev: C6, staging: C6, prod: PROD }
 
 const fail = (msg) => {
   console.error(`verify-envelope: ${msg}`)
