@@ -263,16 +263,15 @@ async function verifierFor(purpose, keys) {
   for (const k of keys) raw[k.kid] = rawFromBase64(k.publicKeyBase64);
   return Ed25519Verifier.fromRawPublicKeys(purpose, raw);
 }
-var FEED_2026A = { kid: "feed-2026a", publicKeyBase64: "d3VM4u2RaSbJ7BC3HPI8PX9XCS7xTlUHA5hRKID9hKo=" };
 var FEED_2026C = { kid: "feed-2026c", publicKeyBase64: "XZDJ7WeMnQd1bziaAJGt/tu8n5+Z/taWj+sOjb3cFUo=" };
 var FEED_2026D = { kid: "feed-2026d", publicKeyBase64: "NvhpNHdWYEi1cyuc5G51KDRqW//JwRRrqcXtopHzRLc=" };
 var CFG_2026A = { kid: "cfg-2026a", publicKeyBase64: "JFJqkUuyDkKVkZupAwfSRc+X2Nn82I3kkSxsxlApyJA=" };
 var CFG_2026E = { kid: "cfg-2026e", publicKeyBase64: "7Fv27oGtbWUGmjFQCMiyJvHU3DKH+E+QPtb0Kxz8O+8=" };
 var CFG_2026D = { kid: "cfg-2026d", publicKeyBase64: "W23ii85cHhsNpK/n9Z50ANHYHtpMJ0L0RjEFXx3q9vE=" };
 var EMBEDDED_KEYRING = {
-  dev: { feed: [FEED_2026A, FEED_2026C, FEED_2026D], config: [CFG_2026A, CFG_2026E, CFG_2026D] },
-  staging: { feed: [FEED_2026A, FEED_2026C, FEED_2026D], config: [CFG_2026A, CFG_2026E, CFG_2026D] },
-  prod: { feed: [FEED_2026A, FEED_2026C, FEED_2026D], config: [CFG_2026A, CFG_2026D, CFG_2026E] }
+  dev: { feed: [FEED_2026C, FEED_2026D], config: [CFG_2026A, CFG_2026E, CFG_2026D] },
+  staging: { feed: [FEED_2026C, FEED_2026D], config: [CFG_2026A, CFG_2026E, CFG_2026D] },
+  prod: { feed: [FEED_2026C, FEED_2026D], config: [CFG_2026D, CFG_2026E] }
 };
 
 // node_modules/.pnpm/zod@4.5.4/node_modules/zod/v4/classic/external.js

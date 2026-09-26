@@ -77,10 +77,8 @@ step without the key, so a secret that does not match `CONFIG_KID` fails the job
 {cfg-2026a, cfg-2026d, cfg-2026e} for every env (re-keyed 2026-09-26: cfg-2026b/c were lost with an
 unopenable encrypted volume before they signed anything and are no longer trusted).
 
-**Follow-up at owner step O-4:** as soon as the first `cfg-2026d` prod publish has landed on `main`, remove
-`cfg-2026a` from `TRUSTED.prod` in the workflow's `PINNED_VERIFY_MJS` and in `tools/verify-envelope.mjs` (one
-commit, dev → staging → main). Until then the prod refresh accepts a `cfg-2026a`-signed prod mirror, and
-`cfg-2026a` is readable by the unreviewed dev/staging jobs.
+**Done at owner step O-4 (2026-09-26):** prod signs with `cfg-2026d` from v31; `cfg-2026a` is no longer trusted for
+prod anywhere (pinned verifier, `tools/verify-envelope.mjs`, platform keyring, config Worker, iOS prod builds).
 
 ## The bundled tool
 

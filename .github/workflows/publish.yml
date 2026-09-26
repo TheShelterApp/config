@@ -29,10 +29,9 @@
 # carry their own secret + CONFIG_KID (cfg-2026d after owner step O-4). A kid must already be trusted by every
 # consumer (platform keyring, iOS EmbeddedKeys, PINNED_VERIFY_MJS below, tools/verify-envelope.mjs) before anything
 # signs with it.
-# FOLLOW-UP at owner step O-4: as soon as the first cfg-2026d prod publish has landed on main, remove cfg-2026a from
-# TRUSTED.prod in PINNED_VERIFY_MJS and in tools/verify-envelope.mjs (one commit, dev → staging → main). Until then
-# the prod refresh accepts a cfg-2026a-signed prod mirror, and cfg-2026a is readable by the unreviewed dev/staging
-# jobs — so a forged prod mirror could steer what the prod-refresh job signs with cfg-2026d.
+# DONE 2026-09-26 (owner step O-4): prod signs with cfg-2026d from v31, and TRUSTED.prod in PINNED_VERIFY_MJS and
+# tools/verify-envelope.mjs no longer contains cfg-2026a, so a prod mirror forged with the dev/staging key (readable by
+# the unreviewed dev/staging jobs) is refused before the prod-refresh job signs anything.
 # Uploads use CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID (environment secrets of dev/staging/prod-refresh: both
 # prod upload jobs run in `prod-refresh`, so an approved prod publish needs no second approval to upload).
 #
@@ -75,11 +74,11 @@ env:
       'cfg-2026e': '7Fv27oGtbWUGmjFQCMiyJvHU3DKH+E+QPtb0Kxz8O+8=',
       'cfg-2026d': 'W23ii85cHhsNpK/n9Z50ANHYHtpMJ0L0RjEFXx3q9vE=',
     }
-    // FOLLOW-UP (owner step O-4): after the first cfg-2026d prod publish, drop cfg-2026a from prod (see the header).
+    // prod does not trust cfg-2026a since owner step O-4 (2026-09-26; prod signs with cfg-2026d from v31).
     const TRUSTED = {
       dev: ['cfg-2026a', 'cfg-2026e', 'cfg-2026d'],
       staging: ['cfg-2026a', 'cfg-2026e', 'cfg-2026d'],
-      prod: ['cfg-2026a', 'cfg-2026e', 'cfg-2026d'],
+      prod: ['cfg-2026d', 'cfg-2026e'],
     }
     const args = process.argv.slice(2)
     const opt = (name) => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : undefined }
