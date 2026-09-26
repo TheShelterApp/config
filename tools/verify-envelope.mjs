@@ -9,15 +9,15 @@
 // TRUSTED is the config trust set per env (platform contract C6, packages/domain/src/keyring.ts). Update it together
 // with the platform keyring, the iOS EmbeddedKeys and PINNED_VERIFY_MJS in .github/workflows/publish.yml (CI does
 // not run this file — it uses that pinned copy) — never trust a kid here before the clients do.
-// FOLLOW-UP at owner step O-4: once the first cfg-2026c prod publish has landed, drop cfg-2026a from TRUSTED.prod
+// FOLLOW-UP at owner step O-4: once the first cfg-2026d prod publish has landed, drop cfg-2026a from TRUSTED.prod
 // here and in the workflow's pinned verifier (cfg-2026a is readable by the unreviewed dev/staging jobs).
 import { verify } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 
 const C6 = {
   'cfg-2026a': 'JFJqkUuyDkKVkZupAwfSRc+X2Nn82I3kkSxsxlApyJA=',
-  'cfg-2026b': 'wb9HVx7ZRkU2VVO1xM9KA/AXjsIQHU3S2H9GIdFh0/g=',
-  'cfg-2026c': '5csqtamD1ZAFR5XneSDjPQ12sRGbdSGRnuDuB4sjqYA=',
+  'cfg-2026e': '7Fv27oGtbWUGmjFQCMiyJvHU3DKH+E+QPtb0Kxz8O+8=',
+  'cfg-2026d': 'W23ii85cHhsNpK/n9Z50ANHYHtpMJ0L0RjEFXx3q9vE=',
 }
 const TRUSTED = { dev: C6, staging: C6, prod: C6 }
 
