@@ -118,4 +118,15 @@ node tools/config-tool.mjs keygen cfg-2027a   # prints { kid, privatePkcs8Pem, p
   `min_supported_build.ios` is a CFBundleVersion floor (the app's build number is the git commit count).
 - `ios-config.regions_db`: `{ version, url, size_bytes, sha256 }` of the offline region-tiles bundle (copy the
   values from `region-tiles/regions-db.json`; `size_bytes`/`sha256` are of the `.gz`, sha256 lowercase hex).
+- `ios-config.videos` (optional): the Videos tab's channel list. The app itself reads each channel's public YouTube
+  RSS, so editing this changes every installed app's Videos list without a release.
+  `{ channels: [{ id, title, lang }], windowDays?, maxItems? }`: `id` is the `UC…` channel id (`UC` + 22
+  characters of `[A-Za-z0-9_-]`, the key of `youtube.com/feeds/videos.xml?channel_id=…`), 1–50 channels with unique
+  ids; `title` is 1–100 characters (shown only when a feed names no channel); `lang` is two lowercase letters
+  (ISO 639-1). `windowDays` 1–30 (the app defaults to 7) is how long an upload stays in the list, and the list's end
+  line names it ("No more 7-day videos"). `maxItems` 1–200 (the app defaults to 60) caps the list. A device picks up
+  a new bundle within a config poll (`poll.configIntervalSeconds`, 900 s); a changed channel set then makes its next
+  Videos load refresh at once instead of waiting out the 30-minute pause. Without the field the app uses the same 17
+  channels compiled in; older builds ignore the key. The schema is `packages/domain/src/config/ios-config.ts` in the
+  platform repo.
 - `alerts-policy`: tiers use the `default` sound (no custom sound ships).
