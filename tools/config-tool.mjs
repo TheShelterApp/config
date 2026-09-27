@@ -19205,6 +19205,27 @@ var iosConfigShape = {
     url: external_exports.url({ protocol: /^https$/ }).max(512),
     size_bytes: external_exports.int().min(1).max(5e8),
     sha256: external_exports.string().regex(/^[0-9a-f]{64}$/)
+  }).optional(),
+  /**
+   * The Videos tab's curated YouTube channels (Figma-parity plan D-P2 / WP-6b). The app fetches each channel's public
+   * RSS feed ON THE DEVICE, keeps the earthquake-related uploads and accumulates them in its own cache, so editing this
+   * list changes every installed app's Videos tab without a release. `windowDays` (how long an upload stays) and
+   * `maxItems` (the list cap) default to 7 and 60 on the client. Optional: an app reading a bundle without it uses its
+   * compiled channel list; apps older than the field ignore it (their IOSConfig decoder skips unknown keys).
+   */
+  videos: external_exports.strictObject({
+    channels: external_exports.array(
+      external_exports.strictObject({
+        /** The YouTube channel id (`UC` + 22 characters), the key of its RSS feed. */
+        id: external_exports.string().regex(/^UC[A-Za-z0-9_-]{22}$/),
+        /** Display name, used until the feed reports the channel's own. */
+        title: external_exports.string().trim().min(1).max(100),
+        /** ISO 639-1 language of the channel's uploads (`en`, `ru`, …). */
+        lang: external_exports.string().regex(/^[a-z]{2}$/)
+      })
+    ).min(1).max(50).refine((channels) => new Set(channels.map((c) => c.id)).size === channels.length, { message: "duplicate channel id" }),
+    windowDays: external_exports.int().min(1).max(30).optional(),
+    maxItems: external_exports.int().min(1).max(200).optional()
   }).optional()
 };
 var iosConfigSchema = external_exports.strictObject(iosConfigShape);
