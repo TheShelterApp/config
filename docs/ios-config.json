@@ -35,5 +35,96 @@
     "url": "https://github.com/TheShelterApp/region-tiles/releases/download/bundle-v1/regions.sqlite.gz",
     "size_bytes": 40337310,
     "sha256": "f14b777271b11d4b720547430d89e0e952576b5017502e99a817d8f757a6b18f"
+  },
+  "videos": {
+    "channels": [
+      {
+        "id": "UCeXH8GZyV3sVqAr45AvupOA",
+        "title": "USGS",
+        "lang": "en"
+      },
+      {
+        "id": "UC8pJCgO88QGRJf4d2FaXNsg",
+        "title": "EarthScope Consortium Science",
+        "lang": "en"
+      },
+      {
+        "id": "UCFeJ5u2-zNiH7FYF-b8yHxg",
+        "title": "International Tsunami Information Center",
+        "lang": "en"
+      },
+      {
+        "id": "UCYeGh5VML5XPr5jYnzh3J6g",
+        "title": "GeologyHub",
+        "lang": "en"
+      },
+      {
+        "id": "UCSPEjw8F2nQDtmUKPFNF7_A",
+        "title": "NHK WORLD-JAPAN",
+        "lang": "en"
+      },
+      {
+        "id": "UC16niRr50-MSBwiO3YDb3RA",
+        "title": "BBC News",
+        "lang": "en"
+      },
+      {
+        "id": "UCknLrEdhRCp1aegoMqRaCZg",
+        "title": "DW News",
+        "lang": "en"
+      },
+      {
+        "id": "UChqUTb7kYRX8-EiaN3XFrSQ",
+        "title": "Reuters",
+        "lang": "en"
+      },
+      {
+        "id": "UC52X5wxOL_s5yw0dQk7NtgA",
+        "title": "Associated Press",
+        "lang": "en"
+      },
+      {
+        "id": "UCNye-wNBqNL5ZzHSJj3l8Bg",
+        "title": "Al Jazeera English",
+        "lang": "en"
+      },
+      {
+        "id": "UCeY0bbntWzzVIaj2z3QigXg",
+        "title": "NBC News",
+        "lang": "en"
+      },
+      {
+        "id": "UC_vFLohxs5PkAxlk7Y6jEtw",
+        "title": "ABC 7 Chicago",
+        "lang": "en"
+      },
+      {
+        "id": "UCEHYbfs9wWuuLPPpbz0VV8Q",
+        "title": "The Daily Jagran",
+        "lang": "en"
+      },
+      {
+        "id": "UC9R4FJF6KQ4DWQw58S3_TOw",
+        "title": "Void Discovery",
+        "lang": "en"
+      },
+      {
+        "id": "UCSH_z5_EFdKIY5uSWEtH_4Q",
+        "title": "Discover Tube",
+        "lang": "en"
+      },
+      {
+        "id": "UCsa_gyETmfTpk369KDbDsbQ",
+        "title": "Impossible on Paper",
+        "lang": "en"
+      },
+      {
+        "id": "UCW35YECq4EySNpglqfSnuJQ",
+        "title": "Weather Alert",
+        "lang": "en"
+      }
+    ],
+    "windowDays": 7,
+    "maxItems": 60
   }
 }
