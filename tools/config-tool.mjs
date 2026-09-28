@@ -19221,7 +19221,13 @@ var iosConfigShape = {
         /** Display name, used until the feed reports the channel's own. */
         title: external_exports.string().trim().min(1).max(100),
         /** ISO 639-1 language of the channel's uploads (`en`, `ru`, …). */
-        lang: external_exports.string().regex(/^[a-z]{2}$/)
+        lang: external_exports.string().regex(/^[a-z]{2}$/),
+        /**
+         * The channel avatar (production-readiness review RH-8): an https URL, read from the channel page once when
+         * the channel is curated. With it the app never scrapes m.youtube.com for the avatar; without it the app
+         * falls back to the channel page, then to the channel's initials.
+         */
+        iconURL: external_exports.url({ protocol: /^https$/ }).max(512).optional()
       })
     ).min(1).max(50).refine((channels) => new Set(channels.map((c) => c.id)).size === channels.length, { message: "duplicate channel id" }),
     windowDays: external_exports.int().min(1).max(30).optional(),
