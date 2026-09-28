@@ -116,6 +116,9 @@ node tools/config-tool.mjs keygen cfg-2027a   # prints { kid, privatePkcs8Pem, p
   `{ id, severity: info|warning, title: {en, ru?}, body: {en, ru?}, url?, until_epoch_sec? }`, and stays `null` for
   the same reason (pre-round-3 builds decode a different notice shape);
   `min_supported_build.ios` is a CFBundleVersion floor (the app's build number is the git commit count).
+  `news_disabled` / `videos_disabled` (optional booleans, absent = `false`; platform decision D-25) are the per-feed
+  kill switches: `true` hides the News or the Videos feed in the app while every other feed keeps working. Builds
+  that predate them ignore the keys (the app decodes this doc with a keyed container).
 - `ios-config.regions_db`: `{ version, url, size_bytes, sha256 }` of the offline region-tiles bundle (copy the
   values from `region-tiles/regions-db.json`; `size_bytes`/`sha256` are of the `.gz`, sha256 lowercase hex).
 - `ios-config.videos` (optional): the Videos tab's channel list. The app itself reads each channel's public YouTube
