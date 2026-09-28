@@ -19255,6 +19255,11 @@ var killSwitchesShape = {
   /** @deprecated retired (plan D-17) — kept only for pre-round-3 iOS decoders; see above. */
   live_activities: external_exports.boolean().optional(),
   feed_disabled: external_exports.boolean(),
+  /** D-25 per-feed kill switch: `true` hides the News feed in the app. Optional; absent = `false`. Builds that predate
+   *  it decode the doc with a keyed container, so they ignore the key. */
+  news_disabled: external_exports.boolean().optional(),
+  /** D-25 per-feed kill switch: `true` hides the Videos feed in the app. Optional; absent = `false` (as news_disabled). */
+  videos_disabled: external_exports.boolean().optional(),
   community_write_mode: external_exports.enum(COMMUNITY_WRITE_MODES),
   usgs_submit: external_exports.boolean(),
   direct_origins_provider_allowlist: external_exports.array(external_exports.enum(DIRECT_ORIGIN_PROVIDERS)).refine((a) => new Set(a).size === a.length, { message: "must be unique" }),

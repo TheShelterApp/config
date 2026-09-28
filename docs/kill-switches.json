@@ -1,5 +1,7 @@
 {
   "feed_disabled": false,
+  "news_disabled": false,
+  "videos_disabled": false,
   "community_write_mode": "normal",
   "usgs_submit": true,
   "live_activities": true,
