@@ -41,72 +41,86 @@
       {
         "id": "UCeXH8GZyV3sVqAr45AvupOA",
         "title": "USGS",
-        "lang": "en"
+        "lang": "en",
+        "iconURL": "https://yt3.googleusercontent.com/6tZvUV992IKNGuLhtHNoOCujaXXrhwZQruEUkyUkIbBVIVNx0qqx_NzkamnWV_73kuDFS_lD=s900-c-k-c0x00ffffff-no-rj"
       },
       {
         "id": "UC8pJCgO88QGRJf4d2FaXNsg",
         "title": "EarthScope Consortium Science",
-        "lang": "en"
+        "lang": "en",
+        "iconURL": "https://yt3.googleusercontent.com/a9WPuEJWlhp26Gic0kWCLxwEobMn_VJMbFB3TM9X6TuzMxplTxTdiWfRMVu8nlZJwuoKPmY7QA=s900-c-k-c0x00ffffff-no-rj"
       },
       {
         "id": "UCFeJ5u2-zNiH7FYF-b8yHxg",
         "title": "International Tsunami Information Center",
-        "lang": "en"
+        "lang": "en",
+        "iconURL": "https://yt3.googleusercontent.com/M_HM87Og9fhDdG_vvl6jYNq-O0N9n7GfugDOSgdVo4d4xEMQQoaE_VBEwdo50jha5WoXHZiWVQ=s900-c-k-c0x00ffffff-no-rj"
       },
       {
         "id": "UCYeGh5VML5XPr5jYnzh3J6g",
         "title": "GeologyHub",
-        "lang": "en"
+        "lang": "en",
+        "iconURL": "https://yt3.googleusercontent.com/5tch7RGxRtY-I-Srae57Pn2R0GJw-QKmxiiNjD6a9fANxTvMutnX5ZLpsbOR1iRGtvBONMgc=s900-c-k-c0x00ffffff-no-rj"
       },
       {
         "id": "UCSPEjw8F2nQDtmUKPFNF7_A",
         "title": "NHK WORLD-JAPAN",
-        "lang": "en"
+        "lang": "en",
+        "iconURL": "https://yt3.googleusercontent.com/ytc/AIdro_m9YDtPWqgZW91_-QTdsVWLbnR0ZQ1BaHX38ZcSRVGnfd0=s900-c-k-c0x00ffffff-no-rj"
       },
       {
         "id": "UC16niRr50-MSBwiO3YDb3RA",
         "title": "BBC News",
-        "lang": "en"
+        "lang": "en",
+        "iconURL": "https://yt3.googleusercontent.com/v4JamQ9B-PUiJHjmZQs9UwTaoLQW8vijJMMpV5QvA2wHQ6iwWM8Q1s6O4jgTl0dtDigVWAi7SA=s900-c-k-c0x00ffffff-no-rj"
       },
       {
         "id": "UCknLrEdhRCp1aegoMqRaCZg",
         "title": "DW News",
-        "lang": "en"
+        "lang": "en",
+        "iconURL": "https://yt3.googleusercontent.com/NSOdTQTWlqMy8O_j32dx-ftfTCHMOt04Hm7KZ4pfAK6-eQzQSZMWvvss90kG8KQfJ7iNP3phyA=s900-c-k-c0x00ffffff-no-rj"
       },
       {
         "id": "UChqUTb7kYRX8-EiaN3XFrSQ",
         "title": "Reuters",
-        "lang": "en"
+        "lang": "en",
+        "iconURL": "https://yt3.googleusercontent.com/bCcVVrrV0EhGFJKsSvmeZHA9Y-YzSL9Keqrrr0HWYUPQy3-mVUVNHMbjwt7IoVkpsHt4E6BZ3pM=s900-c-k-c0x00ffffff-no-rj"
       },
       {
         "id": "UC52X5wxOL_s5yw0dQk7NtgA",
         "title": "Associated Press",
-        "lang": "en"
+        "lang": "en",
+        "iconURL": "https://yt3.googleusercontent.com/I2UXf4n7ukd9hl7UQDsPKN0QXQ9X_NoujZfOY_qPhbBwyJv-K3-rFsrWIDGc3CFylr2cL2c7=s900-c-k-c0x00ffffff-no-rj"
       },
       {
         "id": "UCNye-wNBqNL5ZzHSJj3l8Bg",
         "title": "Al Jazeera English",
-        "lang": "en"
+        "lang": "en",
+        "iconURL": "https://yt3.googleusercontent.com/XsTga3Nsfc1E6ZgC6HfHfzTG_3zhuZleOnsKxSK2aILMjwkkIm-0vdALFaU-yt0Lw07iLtbSifk=s900-c-k-c0x00ffffff-no-rj"
       },
       {
         "id": "UCeY0bbntWzzVIaj2z3QigXg",
         "title": "NBC News",
-        "lang": "en"
+        "lang": "en",
+        "iconURL": "https://yt3.googleusercontent.com/PJj5jtuEOi5UmkFy4IBonj5WcabNcnJAIJe-jZMd1ArwIuVyQxFH_2zryBHwvfv6mJujwRpWDCM=s900-c-k-c0x00ffffff-no-rj"
       },
       {
         "id": "UC_vFLohxs5PkAxlk7Y6jEtw",
         "title": "ABC 7 Chicago",
-        "lang": "en"
+        "lang": "en",
+        "iconURL": "https://yt3.googleusercontent.com/0GcH9zlMTjnF58yRln3NwmFWaXPo6DoZoSxCuLFp61zIYUthOEiBpB3LoeNk5QEtuL_fhFaBIQ=s900-c-k-c0x00ffffff-no-rj"
       },
       {
         "id": "UCEHYbfs9wWuuLPPpbz0VV8Q",
         "title": "The Daily Jagran",
-        "lang": "en"
+        "lang": "en",
+        "iconURL": "https://yt3.googleusercontent.com/dYGquhOLhSXZL-8PiMN4Fnmp0Hop6V_ErYtP99PTY6CabcnAGnDTImGsGoG_mJrtipOBogwdOA=s900-c-k-c0x00ffffff-no-rj"
       },
       {
         "id": "UCsa_gyETmfTpk369KDbDsbQ",
         "title": "Impossible on Paper",
-        "lang": "en"
+        "lang": "en",
+        "iconURL": "https://yt3.googleusercontent.com/KqZu0t9NliNT09LhMM3xGDuXJUKFEQiNo3SJFaqp5zKg3ivcwkXw_NvARrychprXGJ7_5WXyhQ=s900-c-k-c0x00ffffff-no-rj"
       }
     ],
     "windowDays": 7,
