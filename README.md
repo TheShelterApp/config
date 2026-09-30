@@ -129,19 +129,27 @@ node tools/config-tool.mjs keygen cfg-2027a   # prints { kid, privatePkcs8Pem, p
   (ISO 639-1); `iconURL` (optional, https, ≤ 512 characters) is the channel avatar — the `og:image` of
   `m.youtube.com/channel/<id>`, read once when the channel is curated — with which the app never scrapes the channel
   page for the avatar (without it the app reads the page, then falls back to the channel's initials; a stale URL
-  falls back the same way, so refresh it here when YouTube changes it). `windowDays` 1–30 (the app defaults to 7)
-  is how long an upload stays in the list, and the list's end
-  line names it ("No more 7-day videos"). `maxItems` 1–200 (the app defaults to 60) caps the list. A device picks up
-  a new bundle within a config poll (`poll.configIntervalSeconds`, 900 s); a changed channel set then makes its next
+  falls back the same way, so refresh it here when YouTube changes it). `windowDays` 1–30 (the app defaults to 7;
+  this doc sets 14 since 2026-10-01, owner decision) is how long an upload stays in the list, and the list's end
+  line names it ("No more 14-day videos"; builds before 274 ignore the field and keep 7). `maxItems` 1–200 (the app
+  defaults to 60) caps the list. A device picks up a new bundle within a config poll (`poll.configIntervalSeconds`,
+  900 s); a changed channel set then makes its next
   Videos load refresh at once instead of waiting out the 30-minute pause. Without the field the app uses its compiled
-  list (the 14 channels this doc carried on 2026-09-27); older builds ignore the key. The schema is
-  `packages/domain/src/config/ios-config.ts` in the platform repo.
+  list (builds up to 467: the 14 channels this doc carried on 2026-09-27; from build 476 (iOS pr12/videos) on: the
+  26 English channels it carried on 2026-09-30, without DW News and the two Russian channels); older builds ignore
+  the key. The schema is `packages/domain/src/config/ios-config.ts` in the platform repo.
   Curation rule (owner, 2026-09-30): official seismology / geology / tsunami institutions, wire services and
   established public or national broadcasters; no pop-science, no clickbait, no state-propaganda outlets and no
-  organisation Russia lists as "undesirable" (DW since 2025-12, RFE/RL since 2024-02). Before adding a channel, check
-  that its RSS has uploads within the last 60 days and that its titles are English or Russian: the app shows only the
+  organisation Russia lists as "undesirable" (DW since 2025-12, RFE/RL since 2024-02). Exception (owner,
+  2026-10-01): DW News is listed again, the owner accepting the risk of Deutsche Welle's "undesirable" status in
+  Russia. Re-check the register (the Ministry of Justice list; its ru.wikipedia mirror) for every other channel
+  before adding it. Before adding a channel, also check that its RSS has uploads within the last 60 days and that
+  its titles are English or Russian: the app shows only the
   uploads whose TITLE passes its earthquake keyword filter (English + Russian patterns, `VideoFeedLogic.swift`; the
-  description lead is read only for the channel ids compiled into its `scienceChannelIDs`). The app does not filter by
-  `lang` yet: every listed channel reaches every user, so a Russian channel would show Russian titles in the English
-  app too.
+  description lead is read only for the channel ids compiled into its `scienceChannelIDs`, without the institutions'
+  own names). `lang`: builds from 476 (iOS pr12/videos) on show a channel only when its `lang` is `en` or the app's
+  language (English channels reach everyone, Russian ones only the Russian app); builds 467 and older ignore `lang`
+  and show every listed channel to every user, so a Russian channel shows its (earthquake) Russian titles in the
+  English app too. The owner listed BBC News Russian and Euronews in Russian on 2026-10-01 knowing that testers
+  may still run such a build.
 - `alerts-policy`: tiers use the `default` sound (no custom sound ships).

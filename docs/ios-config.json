@@ -117,6 +117,12 @@
         "iconURL": "https://yt3.googleusercontent.com/v4JamQ9B-PUiJHjmZQs9UwTaoLQW8vijJMMpV5QvA2wHQ6iwWM8Q1s6O4jgTl0dtDigVWAi7SA=s900-c-k-c0x00ffffff-no-rj"
       },
       {
+        "id": "UCknLrEdhRCp1aegoMqRaCZg",
+        "title": "DW News",
+        "lang": "en",
+        "iconURL": "https://yt3.googleusercontent.com/NSOdTQTWlqMy8O_j32dx-ftfTCHMOt04Hm7KZ4pfAK6-eQzQSZMWvvss90kG8KQfJ7iNP3phyA=s900-c-k-c0x00ffffff-no-rj"
+      },
+      {
         "id": "UCSPEjw8F2nQDtmUKPFNF7_A",
         "title": "NHK WORLD-JAPAN",
         "lang": "en",
@@ -193,9 +199,21 @@
         "title": "ABC7 News Bay Area",
         "lang": "en",
         "iconURL": "https://yt3.googleusercontent.com/EdKYCZPnilPLNAStHvxCVRARIZSrKdrPig8HgD1fOl9syJqkooTXVEtomAxFYTFn85qYAc2s=s900-c-k-c0x00ffffff-no-rj"
+      },
+      {
+        "id": "UC8zQiuT0m1TELequJ5sp5zw",
+        "title": "BBC News Russian",
+        "lang": "ru",
+        "iconURL": "https://yt3.googleusercontent.com/TVCLSzNJGk-pG36kmKfPke005XoOsPNda57ZY-B7-2gLmhSVolYVXzygiiWmnOoQtNszkXdnrA=s900-c-k-c0x00ffffff-no-rj"
+      },
+      {
+        "id": "UCFzJjgVicCtFxJ5B0P_ei8A",
+        "title": "Euronews in Russian",
+        "lang": "ru",
+        "iconURL": "https://yt3.googleusercontent.com/gPR-KBuAubk7Mr_9tUHcwk8xVWgBlm94LTEQnaTlyBzmVOSUXjv1a-CsT0eO-CXK4KN-RE1w4g=s900-c-k-c0x00ffffff-no-rj"
       }
     ],
-    "windowDays": 7,
+    "windowDays": 14,
     "maxItems": 60
   }
 }
