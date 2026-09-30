@@ -193,6 +193,18 @@
         "title": "ABC7 News Bay Area",
         "lang": "en",
         "iconURL": "https://yt3.googleusercontent.com/EdKYCZPnilPLNAStHvxCVRARIZSrKdrPig8HgD1fOl9syJqkooTXVEtomAxFYTFn85qYAc2s=s900-c-k-c0x00ffffff-no-rj"
+      },
+      {
+        "id": "UC8zQiuT0m1TELequJ5sp5zw",
+        "title": "BBC News Russian",
+        "lang": "ru",
+        "iconURL": "https://yt3.googleusercontent.com/TVCLSzNJGk-pG36kmKfPke005XoOsPNda57ZY-B7-2gLmhSVolYVXzygiiWmnOoQtNszkXdnrA=s900-c-k-c0x00ffffff-no-rj"
+      },
+      {
+        "id": "UCFzJjgVicCtFxJ5B0P_ei8A",
+        "title": "Euronews in Russian",
+        "lang": "ru",
+        "iconURL": "https://yt3.googleusercontent.com/gPR-KBuAubk7Mr_9tUHcwk8xVWgBlm94LTEQnaTlyBzmVOSUXjv1a-CsT0eO-CXK4KN-RE1w4g=s900-c-k-c0x00ffffff-no-rj"
       }
     ],
     "windowDays": 7,
