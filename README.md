@@ -176,7 +176,13 @@ node tools/config-tool.mjs keygen cfg-2027a   # prints { kid, privatePkcs8Pem, p
   and show every listed channel to every user, so a Russian channel shows its (earthquake) Russian titles in the
   English app too. The owner listed BBC News Russian and Euronews in Russian on 2026-10-01 knowing that testers
   may still run such a build.
-- `alerts-policy`: tiers use the `default` sound (no custom sound ships).
+- `alerts-policy`: tiers use the `default` sound (no custom sound ships). `flags.criticalAlerts` (true since 2026-10-06,
+  round 18, after Apple granted the Critical Alerts entitlement to `app.theshelter.ios.app` only) lets the gateway send
+  a device's FIRST tier-0 alert of a quake (M6.0+ within 300 km, never a revision, an update or a test) at the critical
+  interruption level when the device opted in (caps bit 4, set only by an entitled production build after the user
+  turned the switch on). On dev and staging it has no effect: those apps are not entitled, so no device there carries
+  the bit. Setting it to `false` is the critical-only off switch (every alert still goes out Time Sensitive);
+  `killSwitches.fanout` still stops everything. The full rule: platform `docs/design/alert-gateway.md` §16.
 - `features` (CFG-2): every flag is RESERVED — nothing reads `community_reports_v2`, `apple_sign_in` or
   `region_overlay`, and the app has no screen that calls its flag accessor. Keep the `flags` map and `auth`: every iOS
   build to date (437–581 and iOS main, as of 2026-10-06) decodes both as required, and a bundle without either fails
@@ -222,5 +228,5 @@ is in the platform spec `docs/tdd/specs/platform-ports-config.md` ("Who reads ea
 | alerts-policy · `globalMinMag`, `maxAlertAgeSec`, `radiusByMagnitude`, `cellMarginKm`, `tiers`, `quietHoursOverrides`, `revision` | gateway; validate (ranges, order) |
 | alerts-policy · `liveActivity.maxUpdatesPerActivity`, `.endAfterQuietSec`, `.maxLifetimeSec`, `.staleAfterSec`, `.aftershockRadiusKm` | gateway |
 | alerts-policy · `liveActivity.minOs`, `fanout.*`, `apns.activeKid`, `apns.topic` | informational (the gateway uses compiled page sizes and its own `APNS_KEY_ID` / `APNS_TOPIC`); validate: apns formats |
-| alerts-policy · `killSwitches.*`, `flags.broadcastChannels` | gateway |
-| alerts-policy · `flags.testPush`, `flags.watchStandalone`, `flags.criticalAlerts` | reserved (no test-alert route, standalone Watch registration or critical upgrade is built) |
+| alerts-policy · `killSwitches.*`, `flags.broadcastChannels`, `flags.criticalAlerts` | gateway (`flags.criticalAlerts` since 2026-10-06: the first tier-0 alert of a quake to an opted-in device at the critical level) |
+| alerts-policy · `flags.testPush`, `flags.watchStandalone` | reserved (no test-alert route or standalone Watch registration is built) |
