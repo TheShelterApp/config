@@ -74,11 +74,35 @@ it. Before each mirror push, CI self-checks every freshly sealed file with the p
 `CONFIG_KID`, version the one just sealed) — and, in `publish`, with the approved tool's `publish --dry-run` — in a
 step without the key, so a secret that does not match `CONFIG_KID` fails the job instead of reaching devices. The
 `refresh` trust check accepts a published bundle signed by any kid of the env's trusted set: today
-{cfg-2026a, cfg-2026d, cfg-2026e} for every env (re-keyed 2026-09-26: cfg-2026b/c were lost with an
-unopenable encrypted volume before they signed anything and are no longer trusted).
+{cfg-2026a, cfg-2026d, cfg-2026e} for dev and staging and {cfg-2026d, cfg-2026e} for prod (re-keyed 2026-09-26:
+cfg-2026b/c were lost with an unopenable encrypted volume before they signed anything and are no longer trusted).
 
 **Done at owner step O-4 (2026-09-26):** prod signs with `cfg-2026d` from v31; `cfg-2026a` is no longer trusted for
 prod anywhere (pinned verifier, `tools/verify-envelope.mjs`, platform keyring, config Worker, iOS prod builds).
+
+**Open (CFG-9, owner):** `cfg-2026a` is still a REPOSITORY-level secret, and the `dev` and `staging` environments have
+no deployment branch policy, so a workflow on any branch of this repo can read the dev/staging signing key. The fix
+is GitHub settings only (no code change; the workflow already reads `secrets.CONFIG_ED25519_PRIVATE`, and an
+environment secret takes precedence over a repository secret of the same name):
+
+1. Settings → Environments → `dev` → Environment secrets → Add: `CONFIG_ED25519_PRIVATE` = the cfg-2026a PKCS#8 PEM
+   (Apple Passwords). Same for `staging`. (`CONFIG_KID` needs no variable there: the default is `cfg-2026a`.)
+2. Settings → Environments → `dev` → Deployment branches and tags → Selected branches and tags → add `dev` and
+   `main`. `staging`: add `staging` and `main`. `main` is needed because the scheduled `refresh` and
+   `refresh-upload` run their dev and staging legs from `main` (GitHub runs schedules only from the default branch);
+   without it every refresh of dev and staging is refused and their bundles expire in 30 days.
+3. Prove both paths: Actions → config → Run workflow (branch `main`) — the refresh and refresh-upload legs of all three
+   envs are green; then any push to `dev` (e.g. the next doc edit) — publish and publish-upload are green.
+4. Settings → Secrets and variables → Actions → Repository secrets → remove `CONFIG_ED25519_PRIVATE`. Until this step
+   the repository-level copy stays readable from any branch, so the finding stays open. (If step 3 fails, the
+   repository copy is still there to fall back to: put back the branch policies' previous state, investigate.)
+5. Optional: the same environment-only treatment for `CONFIG_KID` if a repository variable exists (it is not secret).
+
+Sources (accessed 2026-10-06): an environment secret wins over a repository secret of the same name
+(https://docs.github.com/en/actions/reference/security/secrets); a deployment branch rule is matched against the
+workflow run's `GITHUB_REF`, which for `schedule` is the default branch
+(https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments,
+https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule).
 
 ## The bundled tool
 
@@ -153,3 +177,48 @@ node tools/config-tool.mjs keygen cfg-2027a   # prints { kid, privatePkcs8Pem, p
   English app too. The owner listed BBC News Russian and Euronews in Russian on 2026-10-01 knowing that testers
   may still run such a build.
 - `alerts-policy`: tiers use the `default` sound (no custom sound ships).
+- `features` (CFG-2): every flag is RESERVED — nothing reads `community_reports_v2`, `apple_sign_in` or
+  `region_overlay`, and the app has no screen that calls its flag accessor. Keep the `flags` map and `auth` (builds
+  437–533 decode both as required). `region_overlay` is `false` while the app draws the overlay unconditionally: set
+  it to `enabled: true, rollout: 100` before any build starts reading it. A new flag does nothing until a client that
+  reads it ships.
+
+## Who reads each knob (CFG-8, as of 2026-10-06)
+
+**iOS** = the app (testers run builds 437–533; "≥ N" is the first build that reads it), **api** = the api Worker,
+**gateway** = the alerts-gateway, **validate** = a rule `config-tool validate` / `seal-policy` checks before signing.
+**Informational** = signed and served but read by nothing at run time: editing it changes no behaviour. **Reserved** =
+meant for a consumer that is not built yet. The config Worker serves every document and reads none of its fields.
+Every field stays while a build in use decodes it as required. The same table, with references, is in the platform
+spec `docs/tdd/specs/platform-ports-config.md` ("Who reads each signed knob").
+
+| Document · knob | Read by |
+|---|---|
+| ios-config · `ios_data_source` | iOS (the data-source override) |
+| ios-config · `feed_disabled` | iOS (builds < 532 read only this copy); validate: equals `kill-switches.feed_disabled` (CFG-1) |
+| ios-config · `poll.configIntervalSeconds`, `poll.jitterFraction` | iOS (config poll cadence, at least 60 s) |
+| ios-config · `poll.manifestIntervalSeconds` | informational |
+| ios-config · `api.*` | informational (each build has its env's api host compiled in) |
+| ios-config · `data.base` | iOS (Stories and the community map) |
+| ios-config · `data.manifestPath`, `data.statusPath` | informational |
+| ios-config · `staleness.*` | informational (freshness comes from the feed's status.json); validate: stale > delayed |
+| ios-config · `reports.*` | informational (compiled in the app and the api); validate: `coarseningCellMeters` = 1000 |
+| ios-config · `tiles.*` | informational (superseded by `regions_db`) |
+| ios-config · `regions_db`, `videos` | iOS |
+| origins · `ladder`, `backoff` | informational (read only by the OriginLadder module, which the app does not use) |
+| origins · `directOrigins.enabled`, `.minIntervalSeconds`, `.jitterFraction` | iOS ≥ 532 |
+| origins · `directOrigins.providers` | informational (URLs are compiled); validate: each name is in the allowlist |
+| alert-thresholds · all | informational; validate: bands ascending |
+| features · `flags.*` | reserved (above) |
+| features · `auth.providers` | informational |
+| kill-switches · `feed_disabled` | iOS ≥ 532 (the authority) |
+| kill-switches · `news_disabled`, `videos_disabled`, `usgs_submit`, `min_supported_build.ios`, `notice` | iOS |
+| kill-switches · `community_write_mode` | iOS and api (the server write gate) |
+| kill-switches · `direct_origins_provider_allowlist` | iOS ≥ 532; validate |
+| kill-switches · `min_supported_build.watchos` | informational (the Watch app reads no config) |
+| kill-switches · `push_alerts`, `live_activities` | retired, read by nothing; kept for pre-round-3 builds |
+| alerts-policy · `globalMinMag`, `maxAlertAgeSec`, `radiusByMagnitude`, `cellMarginKm`, `tiers`, `quietHoursOverrides`, `revision` | gateway; validate (ranges, order) |
+| alerts-policy · `liveActivity.maxUpdatesPerActivity`, `.endAfterQuietSec`, `.maxLifetimeSec`, `.staleAfterSec`, `.aftershockRadiusKm` | gateway |
+| alerts-policy · `liveActivity.minOs`, `fanout.*`, `apns.activeKid`, `apns.topic` | informational (the gateway uses compiled page sizes and its own `APNS_KEY_ID` / `APNS_TOPIC`); validate: apns formats |
+| alerts-policy · `killSwitches.*`, `flags.broadcastChannels` | gateway |
+| alerts-policy · `flags.testPush`, `flags.watchStandalone`, `flags.criticalAlerts` | reserved (no test-alert route, standalone Watch registration or critical upgrade is built) |

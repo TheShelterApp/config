@@ -19166,8 +19166,10 @@ var flagConfigSchema = external_exports.strictObject({
   minBuild: external_exports.strictObject({ ios: external_exports.int().min(1).optional(), watchos: external_exports.int().min(1).optional() }).optional()
 });
 var featuresShape = {
-  flags: external_exports.record(external_exports.string(), flagConfigSchema),
-  auth: external_exports.strictObject({ providers: external_exports.array(external_exports.string()).min(1) })
+  flags: external_exports.record(external_exports.string(), flagConfigSchema).describe(
+    "Client rollout flags (enabled, minBuild, rollout percent of sha256(installationId + name) % 100). RESERVED: as of 2026-10-06 nothing reads any flag (no platform service; no iOS build up to 533 calls ConfigClient.flag). Required by iOS builds 437-533, so the map stays."
+  ),
+  auth: external_exports.strictObject({ providers: external_exports.array(external_exports.string()).min(1) }).describe("Informational: the api serves the providers it composes and the app shows its compiled sign-in options. Required by iOS builds 437-533.")
 };
 var featuresSchema = external_exports.strictObject(featuresShape);
 
@@ -19187,6 +19189,8 @@ var docHeaderSchema = external_exports.strictObject(headerShape);
 var IOS_DATA_SOURCES = ["directOrigins", "feed", "feedWithFallback", "feedRewind"];
 var iosConfigShape = {
   ios_data_source: external_exports.enum(IOS_DATA_SOURCES),
+  /** The copy of `kill-switches.feed_disabled` that builds before 532 read; the two must be equal (CFG-1,
+   *  `crossDocErrors`), and builds from 532 turn the feed off when either says so. */
   feed_disabled: external_exports.boolean(),
   poll: external_exports.strictObject({ manifestIntervalSeconds: external_exports.int().min(1), configIntervalSeconds: external_exports.int().min(1), jitterFraction: external_exports.number().min(0).max(1) }),
   api: external_exports.strictObject({ base: external_exports.url(), healthPath: external_exports.string(), timeoutMs: external_exports.int().min(1) }),
@@ -19347,6 +19351,9 @@ function crossDocErrors(bundle) {
       break;
     }
   }
+  if (ks.feed_disabled !== ios.feed_disabled) {
+    errors.push(`kill-switches.feed_disabled=${ks.feed_disabled} must equal ios-config.feed_disabled=${ios.feed_disabled}`);
+  }
   if (ios.staleness.staleAfterSeconds <= ios.staleness.delayedAfterSeconds) {
     errors.push("ios-config.staleness.staleAfterSeconds must exceed delayedAfterSeconds");
   }
@@ -19398,7 +19405,15 @@ function buildPolicySchema(strict) {
     }),
     apns: obj({ activeKid: external_exports.string(), topic: external_exports.string() }),
     killSwitches: obj({ fanout: external_exports.boolean(), liveActivities: external_exports.boolean(), tier2: external_exports.boolean() }),
-    flags: obj({ testPush: external_exports.boolean(), watchStandalone: external_exports.boolean(), criticalAlerts: external_exports.boolean() })
+    flags: obj({
+      testPush: external_exports.boolean(),
+      watchStandalone: external_exports.boolean(),
+      criticalAlerts: external_exports.boolean(),
+      // ALR-5 (2026-10-04): the APNs broadcast-channel Live Activity lane. It has no subscribers (the app starts its
+      // Live Activity with a per-device update token), so it is OFF unless a signed policy turns it on: absent = off,
+      // and while off the gateway neither creates channels nor reclaims them (beyond draining channels left over).
+      broadcastChannels: external_exports.boolean().optional()
+    })
   });
 }
 var tierSchema = external_exports.strictObject({

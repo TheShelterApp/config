@@ -1,4 +1,4 @@
-# TheShelterApp/config — validate on PR, publish per branch → env on push, and a freshness heartbeat.
+# TheShelterApp/config — validate on PR (documents, tool, workflow), publish per branch → env on push, and a freshness heartbeat.
 # The signer/publisher is the bundled tools/config-tool.mjs (self-contained; no registry needed).
 #
 # Jobs and what each one may run (review findings [1]/[29]/[28]):
@@ -46,7 +46,9 @@
 name: config
 on:
   pull_request:
-    paths: ['docs/**']
+    # A pull request that changes the documents, the bundled tool or this workflow is validated (a re-bundled
+    # tools/config-tool.mjs must accept the documents before it reaches a branch).
+    paths: ['docs/**', 'tools/**', '.github/workflows/**']
   push:
     branches: [dev, staging, main]
     paths: ['docs/**', 'tools/**', '.github/workflows/**']
