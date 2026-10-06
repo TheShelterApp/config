@@ -178,19 +178,21 @@ node tools/config-tool.mjs keygen cfg-2027a   # prints { kid, privatePkcs8Pem, p
   may still run such a build.
 - `alerts-policy`: tiers use the `default` sound (no custom sound ships).
 - `features` (CFG-2): every flag is RESERVED — nothing reads `community_reports_v2`, `apple_sign_in` or
-  `region_overlay`, and the app has no screen that calls its flag accessor. Keep the `flags` map and `auth` (builds
-  437–533 decode both as required). `region_overlay` is `false` while the app draws the overlay unconditionally: set
-  it to `enabled: true, rollout: 100` before any build starts reading it. A new flag does nothing until a client that
-  reads it ships.
+  `region_overlay`, and the app has no screen that calls its flag accessor. Keep the `flags` map and `auth`: every iOS
+  build to date (437–581 and iOS main, as of 2026-10-06) decodes both as required, and a bundle without either fails
+  to decode on every one of them (they keep their last good config, kill switches included). Either can go only after
+  a build that decodes it leniently has become the `kill-switches.min_supported_build.ios` floor. `region_overlay` is
+  `false` while the app draws the overlay unconditionally: set it to `enabled: true, rollout: 100` before any build
+  starts reading it. A new flag does nothing until a client that reads it ships.
 
 ## Who reads each knob (CFG-8, as of 2026-10-06)
 
-**iOS** = the app (testers run builds 437–533; "≥ N" is the first build that reads it), **api** = the api Worker,
-**gateway** = the alerts-gateway, **validate** = a rule `config-tool validate` / `seal-policy` checks before signing.
-**Informational** = signed and served but read by nothing at run time: editing it changes no behaviour. **Reserved** =
-meant for a consumer that is not built yet. The config Worker serves every document and reads none of its fields.
-Every field stays while a build in use decodes it as required. The same table, with references, is in the platform
-spec `docs/tdd/specs/platform-ports-config.md` ("Who reads each signed knob").
+**iOS** = the app (builds 437–581 and iOS main as of 2026-10-06; "≥ N" is the first build that reads it), **api** =
+the api Worker, **gateway** = the alerts-gateway, **validate** = a rule `config-tool validate` / `seal-policy` checks
+before signing. **Informational** = signed and served but read by nothing at run time: editing it changes no
+behaviour. **Reserved** = meant for a consumer that is not built yet. The config Worker serves every document and reads
+none of its fields. Every field stays while a build in use decodes it as required. The same table, with references,
+is in the platform spec `docs/tdd/specs/platform-ports-config.md` ("Who reads each signed knob").
 
 | Document · knob | Read by |
 |---|---|
