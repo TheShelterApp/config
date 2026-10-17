@@ -19167,9 +19167,9 @@ var flagConfigSchema = external_exports.strictObject({
 });
 var featuresShape = {
   flags: external_exports.record(external_exports.string(), flagConfigSchema).describe(
-    "Client rollout flags (enabled, minBuild, rollout percent of sha256(installationId + name) % 100). RESERVED: as of 2026-10-06 nothing reads any flag (no platform service; no iOS build up to 533 calls ConfigClient.flag). Required by iOS builds 437-533, so the map stays."
+    "Client rollout flags (enabled, minBuild, rollout percent of sha256(installationId + name) % 100). RESERVED: as of 2026-10-06 nothing reads any flag (no platform service; no iOS build to date calls ConfigClient.flag). Required by every iOS build to date (437-581 and main, as of 2026-10-06), so the map stays."
   ),
-  auth: external_exports.strictObject({ providers: external_exports.array(external_exports.string()).min(1) }).describe("Informational: the api serves the providers it composes and the app shows its compiled sign-in options. Required by iOS builds 437-533.")
+  auth: external_exports.strictObject({ providers: external_exports.array(external_exports.string()).min(1) }).describe("Informational: the api serves the providers it composes and the app shows its compiled sign-in options. Required by every iOS build to date (437-581 and main, as of 2026-10-06).")
 };
 var featuresSchema = external_exports.strictObject(featuresShape);
 
@@ -19231,7 +19231,13 @@ var iosConfigShape = {
          * the channel is curated. With it the app never scrapes m.youtube.com for the avatar; without it the app
          * falls back to the channel page, then to the channel's initials.
          */
-        iconURL: external_exports.url({ protocol: /^https$/ }).max(512).optional()
+        iconURL: external_exports.url({ protocol: /^https$/ }).max(512).optional(),
+        /**
+         * The ISO 3166-1 alpha-2 code (two uppercase letters) of the organisation's home country (SHLTR-123): the
+         * app groups its Videos filter by country, then by the channels in it. Optional: builds that predate the
+         * field ignore it.
+         */
+        country: external_exports.string().regex(/^[A-Z]{2}$/).optional()
       })
     ).min(1).max(50).refine((channels) => new Set(channels.map((c) => c.id)).size === channels.length, { message: "duplicate channel id" }),
     windowDays: external_exports.int().min(1).max(30).optional(),
@@ -19380,6 +19386,12 @@ function buildPolicySchema(strict) {
     publishedAt: external_exports.iso.datetime(),
     globalMinMag: external_exports.number(),
     maxAlertAgeSec: external_exports.int().min(1),
+    // Optional (round 19): the critical-only age bound. A device's first tier-0 alert goes out at the critical level only
+    // while now − origin ≤ this many seconds; later the same alert goes out at the tier's own level (Time Sensitive).
+    // Absent → CRITICAL_MAX_AGE_SEC (30 min, decide.ts), so every policy signed before the field keeps its meaning and
+    // no publish is needed. 0 = no alert is young enough (critical off by age). Signing a policy that carries it needs a
+    // config tool bundled from this schema (the tool and the doc land in one commit, config README).
+    criticalMaxAgeSec: external_exports.int().min(0).optional(),
     radiusByMagnitude: external_exports.array(external_exports.tuple([external_exports.number(), external_exports.number()])).min(1),
     cellMarginKm: external_exports.number().min(0),
     // Optional (WP-1.3): the alert radius an event must reach before an IP-derived device cell is alerted.
@@ -19408,6 +19420,9 @@ function buildPolicySchema(strict) {
     flags: obj({
       testPush: external_exports.boolean(),
       watchStandalone: external_exports.boolean(),
+      // Round 18 (Apple granted the entitlement to app.theshelter.ios.app on 2026-10-06): true lets the gateway send a
+      // device's FIRST tier-0 alert of a quake at the critical interruption level when the device opted in (caps bit 4)
+      // — criticalVerdict in decide.ts has every condition. false → no alert is critical (the critical-only switch).
       criticalAlerts: external_exports.boolean(),
       // ALR-5 (2026-10-04): the APNs broadcast-channel Live Activity lane. It has no subscribers (the app starts its
       // Live Activity with a per-device update token), so it is OFF unless a signed policy turns it on: absent = off,
