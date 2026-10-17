@@ -42,175 +42,204 @@
         "id": "UCeXH8GZyV3sVqAr45AvupOA",
         "title": "USGS",
         "lang": "en",
-        "iconURL": "https://yt3.googleusercontent.com/6tZvUV992IKNGuLhtHNoOCujaXXrhwZQruEUkyUkIbBVIVNx0qqx_NzkamnWV_73kuDFS_lD=s900-c-k-c0x00ffffff-no-rj"
+        "iconURL": "https://yt3.googleusercontent.com/6tZvUV992IKNGuLhtHNoOCujaXXrhwZQruEUkyUkIbBVIVNx0qqx_NzkamnWV_73kuDFS_lD=s900-c-k-c0x00ffffff-no-rj",
+        "country": "US"
       },
       {
         "id": "UC8pJCgO88QGRJf4d2FaXNsg",
         "title": "EarthScope Consortium Science",
         "lang": "en",
-        "iconURL": "https://yt3.googleusercontent.com/a9WPuEJWlhp26Gic0kWCLxwEobMn_VJMbFB3TM9X6TuzMxplTxTdiWfRMVu8nlZJwuoKPmY7QA=s900-c-k-c0x00ffffff-no-rj"
+        "iconURL": "https://yt3.googleusercontent.com/a9WPuEJWlhp26Gic0kWCLxwEobMn_VJMbFB3TM9X6TuzMxplTxTdiWfRMVu8nlZJwuoKPmY7QA=s900-c-k-c0x00ffffff-no-rj",
+        "country": "US"
       },
       {
         "id": "UCFeJ5u2-zNiH7FYF-b8yHxg",
         "title": "International Tsunami Information Center",
         "lang": "en",
-        "iconURL": "https://yt3.googleusercontent.com/M_HM87Og9fhDdG_vvl6jYNq-O0N9n7GfugDOSgdVo4d4xEMQQoaE_VBEwdo50jha5WoXHZiWVQ=s900-c-k-c0x00ffffff-no-rj"
+        "iconURL": "https://yt3.googleusercontent.com/M_HM87Og9fhDdG_vvl6jYNq-O0N9n7GfugDOSgdVo4d4xEMQQoaE_VBEwdo50jha5WoXHZiWVQ=s900-c-k-c0x00ffffff-no-rj",
+        "country": "US"
       },
       {
         "id": "UCxvFlLlaNxYkYxDbHskbHBg",
         "title": "Earthquake Engineering Research Institute (EERI)",
         "lang": "en",
-        "iconURL": "https://yt3.googleusercontent.com/ytc/AIdro_kQ3f54gZnx3c7kHG88KzocNGoMj2a3xdcjUGkq29Y3xQ=s900-c-k-c0x00ffffff-no-rj"
+        "iconURL": "https://yt3.googleusercontent.com/ytc/AIdro_kQ3f54gZnx3c7kHG88KzocNGoMj2a3xdcjUGkq29Y3xQ=s900-c-k-c0x00ffffff-no-rj",
+        "country": "US"
       },
       {
         "id": "UCfvGcHtZYk_kQ_mqz3AYQYQ",
         "title": "GEM Global Earthquake Model",
         "lang": "en",
-        "iconURL": "https://yt3.googleusercontent.com/ytc/AIdro_mB0PwnO9qc5xmd_NjVJheAjo0qpISL2K6gCknFpKZjjqg=s900-c-k-c0x00ffffff-no-rj"
+        "iconURL": "https://yt3.googleusercontent.com/ytc/AIdro_mB0PwnO9qc5xmd_NjVJheAjo0qpISL2K6gCknFpKZjjqg=s900-c-k-c0x00ffffff-no-rj",
+        "country": "IT"
       },
       {
         "id": "UCgAl8LBLsSw5pubLKhG2Y-g",
         "title": "Pacific Northwest Seismic Network (PNSN)",
         "lang": "en",
-        "iconURL": "https://yt3.googleusercontent.com/ytc/AIdro_m7682uFL6hLJekAiXXFm2Op6GxnacXzZsnEj1LQJ5piPk=s900-c-k-c0x00ffffff-no-rj"
+        "iconURL": "https://yt3.googleusercontent.com/ytc/AIdro_m7682uFL6hLJekAiXXFm2Op6GxnacXzZsnEj1LQJ5piPk=s900-c-k-c0x00ffffff-no-rj",
+        "country": "US"
       },
       {
         "id": "UCchkJAERQtukeJla7_GquGQ",
         "title": "Alaska Earthquake Center",
         "lang": "en",
-        "iconURL": "https://yt3.googleusercontent.com/ytc/AIdro_nip995HVQbQGlK9KVFnB8-Nn0K75gq3ZEQKd1UKmiB6Q=s900-c-k-c0x00ffffff-no-rj"
+        "iconURL": "https://yt3.googleusercontent.com/ytc/AIdro_nip995HVQbQGlK9KVFnB8-Nn0K75gq3ZEQKd1UKmiB6Q=s900-c-k-c0x00ffffff-no-rj",
+        "country": "US"
       },
       {
         "id": "UCgglOEaXbvCJCrIj6R2EIBw",
         "title": "Geoscience Australia",
         "lang": "en",
-        "iconURL": "https://yt3.googleusercontent.com/hlKnok44cKSmXhdaupAzxIidQRwA5lyytm0MArCKlXUZ43YAGdJS61UGQjMzb-WrkDbBsB2yMw=s900-c-k-c0x00ffffff-no-rj"
+        "iconURL": "https://yt3.googleusercontent.com/hlKnok44cKSmXhdaupAzxIidQRwA5lyytm0MArCKlXUZ43YAGdJS61UGQjMzb-WrkDbBsB2yMw=s900-c-k-c0x00ffffff-no-rj",
+        "country": "AU"
       },
       {
         "id": "UC0JCbQti3FlTIzrJGZqzh3Q",
         "title": "British Geological Survey",
         "lang": "en",
-        "iconURL": "https://yt3.googleusercontent.com/ytc/AIdro_k7CTXRs6cplx5iA4Pv9z7N2ChnIpu2qywrw4WltGzrG9M=s900-c-k-c0x00ffffff-no-rj"
+        "iconURL": "https://yt3.googleusercontent.com/ytc/AIdro_k7CTXRs6cplx5iA4Pv9z7N2ChnIpu2qywrw4WltGzrG9M=s900-c-k-c0x00ffffff-no-rj",
+        "country": "GB"
       },
       {
         "id": "UChqUTb7kYRX8-EiaN3XFrSQ",
         "title": "Reuters",
         "lang": "en",
-        "iconURL": "https://yt3.googleusercontent.com/bCcVVrrV0EhGFJKsSvmeZHA9Y-YzSL9Keqrrr0HWYUPQy3-mVUVNHMbjwt7IoVkpsHt4E6BZ3pM=s900-c-k-c0x00ffffff-no-rj"
+        "iconURL": "https://yt3.googleusercontent.com/bCcVVrrV0EhGFJKsSvmeZHA9Y-YzSL9Keqrrr0HWYUPQy3-mVUVNHMbjwt7IoVkpsHt4E6BZ3pM=s900-c-k-c0x00ffffff-no-rj",
+        "country": "GB"
       },
       {
         "id": "UC52X5wxOL_s5yw0dQk7NtgA",
         "title": "Associated Press",
         "lang": "en",
-        "iconURL": "https://yt3.googleusercontent.com/I2UXf4n7ukd9hl7UQDsPKN0QXQ9X_NoujZfOY_qPhbBwyJv-K3-rFsrWIDGc3CFylr2cL2c7=s900-c-k-c0x00ffffff-no-rj"
+        "iconURL": "https://yt3.googleusercontent.com/I2UXf4n7ukd9hl7UQDsPKN0QXQ9X_NoujZfOY_qPhbBwyJv-K3-rFsrWIDGc3CFylr2cL2c7=s900-c-k-c0x00ffffff-no-rj",
+        "country": "US"
       },
       {
         "id": "UC86dbj-lbDks_hZ5gRKL49Q",
         "title": "AFP News Agency",
         "lang": "en",
-        "iconURL": "https://yt3.googleusercontent.com/ytc/AIdro_kUhmA2lfpvTaae-mHvsBOGez1u0ZoH-7GIH2tCCfiHAm_e=s900-c-k-c0x00ffffff-no-rj"
+        "iconURL": "https://yt3.googleusercontent.com/ytc/AIdro_kUhmA2lfpvTaae-mHvsBOGez1u0ZoH-7GIH2tCCfiHAm_e=s900-c-k-c0x00ffffff-no-rj",
+        "country": "FR"
       },
       {
         "id": "UC16niRr50-MSBwiO3YDb3RA",
         "title": "BBC News",
         "lang": "en",
-        "iconURL": "https://yt3.googleusercontent.com/v4JamQ9B-PUiJHjmZQs9UwTaoLQW8vijJMMpV5QvA2wHQ6iwWM8Q1s6O4jgTl0dtDigVWAi7SA=s900-c-k-c0x00ffffff-no-rj"
+        "iconURL": "https://yt3.googleusercontent.com/v4JamQ9B-PUiJHjmZQs9UwTaoLQW8vijJMMpV5QvA2wHQ6iwWM8Q1s6O4jgTl0dtDigVWAi7SA=s900-c-k-c0x00ffffff-no-rj",
+        "country": "GB"
       },
       {
         "id": "UCknLrEdhRCp1aegoMqRaCZg",
         "title": "DW News",
         "lang": "en",
-        "iconURL": "https://yt3.googleusercontent.com/NSOdTQTWlqMy8O_j32dx-ftfTCHMOt04Hm7KZ4pfAK6-eQzQSZMWvvss90kG8KQfJ7iNP3phyA=s900-c-k-c0x00ffffff-no-rj"
+        "iconURL": "https://yt3.googleusercontent.com/NSOdTQTWlqMy8O_j32dx-ftfTCHMOt04Hm7KZ4pfAK6-eQzQSZMWvvss90kG8KQfJ7iNP3phyA=s900-c-k-c0x00ffffff-no-rj",
+        "country": "DE"
       },
       {
         "id": "UCSPEjw8F2nQDtmUKPFNF7_A",
         "title": "NHK WORLD-JAPAN",
         "lang": "en",
-        "iconURL": "https://yt3.googleusercontent.com/ytc/AIdro_m9YDtPWqgZW91_-QTdsVWLbnR0ZQ1BaHX38ZcSRVGnfd0=s900-c-k-c0x00ffffff-no-rj"
+        "iconURL": "https://yt3.googleusercontent.com/ytc/AIdro_m9YDtPWqgZW91_-QTdsVWLbnR0ZQ1BaHX38ZcSRVGnfd0=s900-c-k-c0x00ffffff-no-rj",
+        "country": "JP"
       },
       {
         "id": "UCNye-wNBqNL5ZzHSJj3l8Bg",
         "title": "Al Jazeera English",
         "lang": "en",
-        "iconURL": "https://yt3.googleusercontent.com/XsTga3Nsfc1E6ZgC6HfHfzTG_3zhuZleOnsKxSK2aILMjwkkIm-0vdALFaU-yt0Lw07iLtbSifk=s900-c-k-c0x00ffffff-no-rj"
+        "iconURL": "https://yt3.googleusercontent.com/XsTga3Nsfc1E6ZgC6HfHfzTG_3zhuZleOnsKxSK2aILMjwkkIm-0vdALFaU-yt0Lw07iLtbSifk=s900-c-k-c0x00ffffff-no-rj",
+        "country": "QA"
       },
       {
         "id": "UCQfwfsi5VrQ8yKZ-UWmAEFg",
         "title": "FRANCE 24 English",
         "lang": "en",
-        "iconURL": "https://yt3.googleusercontent.com/ytc/AIdro_n_QTJ5-GLGnftQFkb7Kp36W2eBH3H-7ZqTQxzFkkqGrIE=s900-c-k-c0x00ffffff-no-rj"
+        "iconURL": "https://yt3.googleusercontent.com/ytc/AIdro_n_QTJ5-GLGnftQFkb7Kp36W2eBH3H-7ZqTQxzFkkqGrIE=s900-c-k-c0x00ffffff-no-rj",
+        "country": "FR"
       },
       {
         "id": "UC83jt4dlz1Gjl58fzQrrKZg",
         "title": "CNA",
         "lang": "en",
-        "iconURL": "https://yt3.googleusercontent.com/ytc/AIdro_n00DzE39o-4IFJ07IP3gG__TMqKxXXbwYaARinwTXTDFM=s900-c-k-c0x00ffffff-no-rj"
+        "iconURL": "https://yt3.googleusercontent.com/ytc/AIdro_n00DzE39o-4IFJ07IP3gG__TMqKxXXbwYaARinwTXTDFM=s900-c-k-c0x00ffffff-no-rj",
+        "country": "SG"
       },
       {
         "id": "UCVgO39Bk5sMo66-6o6Spn6Q",
         "title": "ABC News (Australia)",
         "lang": "en",
-        "iconURL": "https://yt3.googleusercontent.com/sc9xa2bYk6pIuKX3qgMHSrxEkuPmg57JMl_lRaJqCZxuSIeQt1B6BV23c-16Q3b7Aep0on1b=s900-c-k-c0x00ffffff-no-rj"
+        "iconURL": "https://yt3.googleusercontent.com/sc9xa2bYk6pIuKX3qgMHSrxEkuPmg57JMl_lRaJqCZxuSIeQt1B6BV23c-16Q3b7Aep0on1b=s900-c-k-c0x00ffffff-no-rj",
+        "country": "AU"
       },
       {
         "id": "UCuFFtHWoLl5fauMMD5Ww2jA",
         "title": "CBC News",
         "lang": "en",
-        "iconURL": "https://yt3.googleusercontent.com/9bJu0WRWPRgja30h3i5gh3Mg4T94dVfcm6L8SEhjkM3j-AwqFKQZp1JxLhXpSVYzQjJTOXiw2vM=s900-c-k-c0x00ffffff-no-rj"
+        "iconURL": "https://yt3.googleusercontent.com/9bJu0WRWPRgja30h3i5gh3Mg4T94dVfcm6L8SEhjkM3j-AwqFKQZp1JxLhXpSVYzQjJTOXiw2vM=s900-c-k-c0x00ffffff-no-rj",
+        "country": "CA"
       },
       {
         "id": "UCCJBSLNtozkO-NqjpPZujiQ",
         "title": "TaiwanPlus News",
         "lang": "en",
-        "iconURL": "https://yt3.googleusercontent.com/IK9gUaHUadmZo2-jetUUuXrUxg2yWpkyq1qv9aUS0Yy1CSuuPFh3n3_EGA6RfimjlhXRAc58EA=s900-c-k-c0x00ffffff-no-rj"
+        "iconURL": "https://yt3.googleusercontent.com/IK9gUaHUadmZo2-jetUUuXrUxg2yWpkyq1qv9aUS0Yy1CSuuPFh3n3_EGA6RfimjlhXRAc58EA=s900-c-k-c0x00ffffff-no-rj",
+        "country": "TW"
       },
       {
         "id": "UCIRYBXDze5krPDzAEOxFGVA",
         "title": "Guardian News",
         "lang": "en",
-        "iconURL": "https://yt3.googleusercontent.com/ytc/AIdro_nDo1i4jEe90wqB2OCDy57NjTMVUHo1o7vFBjLzVzLeBQI=s900-c-k-c0x00ffffff-no-rj"
+        "iconURL": "https://yt3.googleusercontent.com/ytc/AIdro_nDo1i4jEe90wqB2OCDy57NjTMVUHo1o7vFBjLzVzLeBQI=s900-c-k-c0x00ffffff-no-rj",
+        "country": "GB"
       },
       {
         "id": "UCdnZdQxYXnbN4uWJg96oGxw",
         "title": "Rappler",
         "lang": "en",
-        "iconURL": "https://yt3.googleusercontent.com/ytc/AIdro_lUS5QhCxCjzWD8-jglbVpbKcePZaH2adUNUbG5cCW9k80g=s900-c-k-c0x00ffffff-no-rj"
+        "iconURL": "https://yt3.googleusercontent.com/ytc/AIdro_lUS5QhCxCjzWD8-jglbVpbKcePZaH2adUNUbG5cCW9k80g=s900-c-k-c0x00ffffff-no-rj",
+        "country": "PH"
       },
       {
         "id": "UCeY0bbntWzzVIaj2z3QigXg",
         "title": "NBC News",
         "lang": "en",
-        "iconURL": "https://yt3.googleusercontent.com/PJj5jtuEOi5UmkFy4IBonj5WcabNcnJAIJe-jZMd1ArwIuVyQxFH_2zryBHwvfv6mJujwRpWDCM=s900-c-k-c0x00ffffff-no-rj"
+        "iconURL": "https://yt3.googleusercontent.com/PJj5jtuEOi5UmkFy4IBonj5WcabNcnJAIJe-jZMd1ArwIuVyQxFH_2zryBHwvfv6mJujwRpWDCM=s900-c-k-c0x00ffffff-no-rj",
+        "country": "US"
       },
       {
         "id": "UC8p1vwvWtl6T73JiExfWs1g",
         "title": "CBS News",
         "lang": "en",
-        "iconURL": "https://yt3.googleusercontent.com/ytc/AIdro_niBFv49gSx4rr1afMZU_Pv7SeuPKO2SMHvv0Ar7OKxM4o=s900-c-k-c0x00ffffff-no-rj"
+        "iconURL": "https://yt3.googleusercontent.com/ytc/AIdro_niBFv49gSx4rr1afMZU_Pv7SeuPKO2SMHvv0Ar7OKxM4o=s900-c-k-c0x00ffffff-no-rj",
+        "country": "US"
       },
       {
         "id": "UCVxBA3Cbu3pm8w8gEIoMEog",
         "title": "ABC7 Los Angeles",
         "lang": "en",
-        "iconURL": "https://yt3.googleusercontent.com/Zso9iim2DGZXqypIvp6yzzGr31t6a1_UovdJY-mw2ym263F7_hw7e0QJf52jO5stXRMegHCJFg=s900-c-k-c0x00ffffff-no-rj"
+        "iconURL": "https://yt3.googleusercontent.com/Zso9iim2DGZXqypIvp6yzzGr31t6a1_UovdJY-mw2ym263F7_hw7e0QJf52jO5stXRMegHCJFg=s900-c-k-c0x00ffffff-no-rj",
+        "country": "US"
       },
       {
         "id": "UCYUbNjkuE4lsr2v1Id2O1oA",
         "title": "ABC7 News Bay Area",
         "lang": "en",
-        "iconURL": "https://yt3.googleusercontent.com/EdKYCZPnilPLNAStHvxCVRARIZSrKdrPig8HgD1fOl9syJqkooTXVEtomAxFYTFn85qYAc2s=s900-c-k-c0x00ffffff-no-rj"
+        "iconURL": "https://yt3.googleusercontent.com/EdKYCZPnilPLNAStHvxCVRARIZSrKdrPig8HgD1fOl9syJqkooTXVEtomAxFYTFn85qYAc2s=s900-c-k-c0x00ffffff-no-rj",
+        "country": "US"
       },
       {
         "id": "UC8zQiuT0m1TELequJ5sp5zw",
         "title": "BBC News Russian",
         "lang": "ru",
-        "iconURL": "https://yt3.googleusercontent.com/TVCLSzNJGk-pG36kmKfPke005XoOsPNda57ZY-B7-2gLmhSVolYVXzygiiWmnOoQtNszkXdnrA=s900-c-k-c0x00ffffff-no-rj"
+        "iconURL": "https://yt3.googleusercontent.com/TVCLSzNJGk-pG36kmKfPke005XoOsPNda57ZY-B7-2gLmhSVolYVXzygiiWmnOoQtNszkXdnrA=s900-c-k-c0x00ffffff-no-rj",
+        "country": "GB"
       },
       {
         "id": "UCFzJjgVicCtFxJ5B0P_ei8A",
         "title": "Euronews in Russian",
         "lang": "ru",
-        "iconURL": "https://yt3.googleusercontent.com/gPR-KBuAubk7Mr_9tUHcwk8xVWgBlm94LTEQnaTlyBzmVOSUXjv1a-CsT0eO-CXK4KN-RE1w4g=s900-c-k-c0x00ffffff-no-rj"
+        "iconURL": "https://yt3.googleusercontent.com/gPR-KBuAubk7Mr_9tUHcwk8xVWgBlm94LTEQnaTlyBzmVOSUXjv1a-CsT0eO-CXK4KN-RE1w4g=s900-c-k-c0x00ffffff-no-rj",
+        "country": "FR"
       }
     ],
     "windowDays": 14,
