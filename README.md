@@ -147,13 +147,16 @@ node tools/config-tool.mjs keygen cfg-2027a   # prints { kid, privatePkcs8Pem, p
   values from `region-tiles/regions-db.json`; `size_bytes`/`sha256` are of the `.gz`, sha256 lowercase hex).
 - `ios-config.videos` (optional): the Videos tab's channel list. The app itself reads each channel's public YouTube
   RSS, so editing this changes every installed app's Videos list without a release.
-  `{ channels: [{ id, title, lang, iconURL? }], windowDays?, maxItems? }`: `id` is the `UC…` channel id (`UC` + 22
+  `{ channels: [{ id, title, lang, iconURL?, country? }], windowDays?, maxItems? }`: `id` is the `UC…` channel id (`UC` + 22
   characters of `[A-Za-z0-9_-]`, the key of `youtube.com/feeds/videos.xml?channel_id=…`), 1–50 channels with unique
   ids; `title` is 1–100 characters (shown only when a feed names no channel); `lang` is two lowercase letters
   (ISO 639-1); `iconURL` (optional, https, ≤ 512 characters) is the channel avatar — the `og:image` of
   `m.youtube.com/channel/<id>`, read once when the channel is curated — with which the app never scrapes the channel
   page for the avatar (without it the app reads the page, then falls back to the channel's initials; a stale URL
-  falls back the same way, so refresh it here when YouTube changes it). `windowDays` 1–30 (the app defaults to 7;
+  falls back the same way, so refresh it here when YouTube changes it). `country` (optional, since 2026-10-17,
+  SHLTR-123) is the ISO 3166-1 alpha-2 code (two uppercase letters) of the organisation's home country, not of its
+  audience or of the YouTube account's country setting; the app groups its Videos filter by it (countries, then the
+  channels in each), and builds that predate the field ignore it. `windowDays` 1–30 (the app defaults to 7;
   this doc sets 14 since 2026-10-01, owner decision) is how long an upload stays in the list, and the list's end
   line names it ("No more 14-day videos"; builds before 274 ignore the field and keep 7). `maxItems` 1–200 (the app
   defaults to 60) caps the list. A device picks up a new bundle within a config poll (`poll.configIntervalSeconds`,
