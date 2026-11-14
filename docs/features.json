@@ -17,6 +17,13 @@
     "region_overlay": {
       "enabled": false,
       "rollout": 0
+    },
+    "quiz_compare": {
+      "enabled": true,
+      "rollout": 100,
+      "minBuild": {
+        "ios": 805
+      }
     }
   },
   "auth": {
