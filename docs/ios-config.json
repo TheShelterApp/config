@@ -244,5 +244,19 @@
     ],
     "windowDays": 14,
     "maxItems": 60
+  },
+  "learn": {
+    "packs": [
+      {
+        "schema": 1,
+        "version": 1,
+        "urls": [
+          "https://data.theshelter.app/v1/content/learn/b22f0975b6113e2a53ccf305c1d7ce933f316e938267e8c98076e3adce13f073.json"
+        ],
+        "size_bytes": 59623,
+        "sha256": "b22f0975b6113e2a53ccf305c1d7ce933f316e938267e8c98076e3adce13f073",
+        "min_build": 976
+      }
+    ]
   }
 }
