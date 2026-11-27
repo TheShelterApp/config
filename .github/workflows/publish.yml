@@ -127,6 +127,13 @@ jobs:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with: { node-version: '22' }
       - run: node tools/config-tool.mjs validate docs/
+      # The same Learn pointer check the push-time `learn-gate` job runs, so a bad pointer fails the PR before merge. No
+      # secret, no environment; the job's token is the default one. Schema and own-data-host checks are offline; only a
+      # pointer that differs from the published mirror makes the tool GET the packs on the env's own data host.
+      - name: Check the Learn pointer (the push-time learn-gate command, no key, no credential)
+        env:
+          ENV: ${{ github.base_ref == 'main' && 'prod' || github.base_ref }}
+        run: node tools/config-tool.mjs learn-gate docs/ --env "$ENV" --published "published/$ENV/v1/ios-config.json" --summary "$GITHUB_STEP_SUMMARY"
 
   # The Learn pointer check (plan 2026-11-27, guard G6), in its own job so it never shares a runner with the signing
   # key: no environment, no secret, read-only token. It runs the tool of the EVENT commit (the one `publish` signs with)
