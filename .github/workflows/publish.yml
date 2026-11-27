@@ -2,6 +2,9 @@
 # The signer/publisher is the bundled tools/config-tool.mjs (self-contained; no registry needed).
 #
 # Jobs and what each one may run (review findings [1]/[29]/[28]):
+#   learn-gate      push → the pushed commit's `config-tool learn-gate` (the Learn pack pointer check). No environment,
+#                   no secret, read-only GITHUB_TOKEN; `publish` needs it, so a pointer that does not match its pack is
+#                   never signed. Docs without `learn` pass offline, so removing `learn` never depends on the data host.
 #   publish         push → validate, seal, self-check, commit + push the mirror. Runs in `prod` (1 reviewer) / `dev` /
 #                   `staging`. It runs ONLY git, the verifier pinned in THIS file (PINNED_VERIFY_MJS) and the tool of
 #                   the pushed (approved) commit; the signing key is in ONE step, which runs nothing but that tool's
@@ -125,8 +128,31 @@ jobs:
         with: { node-version: '22' }
       - run: node tools/config-tool.mjs validate docs/
 
+  # The Learn pointer check (plan 2026-11-27, guard G6), in its own job so it never shares a runner with the signing
+  # key: no environment, no secret, read-only token. It runs the tool of the EVENT commit (the one `publish` signs with)
+  # against the event commit's mirror. Offline when docs/ios-config.json has no `learn` or the same `learn` as the
+  # signed mirror; otherwise it GETs every pack URL on the env's own data host and fails on a size, sha256, schema or
+  # version mismatch (and on prod on a non-prod pack or an unreleased course). Not run by `refresh`, which re-seals
+  # already-published content.
+  learn-gate:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      ENV: ${{ github.ref_name == 'main' && 'prod' || github.ref_name }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with: { node-version: '22' }
+      - name: Check the Learn pointer against the published pack (no key, no credential)
+        run: node tools/config-tool.mjs learn-gate docs/ --env "$ENV" --published "published/$ENV/v1/ios-config.json" --summary "$GITHUB_STEP_SUMMARY"
+
   publish:
     if: github.event_name == 'push'
+    needs: [learn-gate]
     runs-on: ubuntu-24.04
     permissions:
       contents: write

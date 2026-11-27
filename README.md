@@ -22,13 +22,15 @@ the gateway runs the restrictive compiled fallback (tier-2 off).
 
 | job | trigger | runs | holds |
 |---|---|---|---|
-| `publish` | push to dev/staging/main | git, the workflow-pinned verifier, the PUSHED commit's tool | signing key (one step: seal/seal-policy only), push credential (the `git push` only) |
+| `learn-gate` | push to dev/staging/main | the PUSHED commit's `tools/config-tool.mjs learn-gate` | nothing: no environment, no secret, read-only GITHUB_TOKEN |
+| `publish` | push to dev/staging/main, after `learn-gate` passed | git, the workflow-pinned verifier, the PUSHED commit's tool | signing key (one step: seal/seal-policy only), push credential (the `git push` only) |
 | `publish-upload` | after `publish` | the branch tip's `tools/config-tool.mjs publish`, `npx wrangler` | `CLOUDFLARE_API_TOKEN` (read-only GITHUB_TOKEN) |
 | `refresh` | Mon/Thu 05:23 UTC, dispatch | git, the workflow-pinned verifier, the PUBLISHED commit's tool — no branch-tip code | signing key (one step: seal/seal-policy only), push credential (the `git push` only) |
 | `refresh-upload` | after `refresh` | like `publish-upload`, per env | like `publish-upload` |
 
 - Branch-tip code and `npx wrangler` (unpinned dependency tree) run only in the upload jobs, which never see the
-  signing key and cannot push. The prod upload jobs run in `prod-refresh` (no second approval).
+  signing key and cannot push. `learn-gate` is the one job that reads the network before a seal; it holds nothing
+  (see "The Learn pointer and its gate" below), and `publish` runs only after it passed. The prod upload jobs run in `prod-refresh` (no second approval).
 - The refresh locates "the last published content" with the verifier pinned in the workflow file
   (`PINNED_VERIFY_MJS`), not with `tools/verify-envelope.mjs` from the checkout.
 - Both seal jobs refuse a version (the branch commit count) that is not above the version the mirror holds (a
@@ -115,7 +117,11 @@ node_modules/.pnpm/node_modules/.bin/esbuild packages/config-tool/src/cli.ts --b
   --platform=node --outfile=../config/tools/config-tool.mjs
 ```
 
-then run `node tools/config-tool.mjs validate docs/` here. A schema change in the platform (a field added or
+then run `node tools/config-tool.mjs validate docs/` here. When the platform checkout or this one is a git worktree,
+pass the ABSOLUTE path of the checkout you will commit as `--outfile`: the relative path above writes into whichever
+`config` directory sits next to the platform checkout. Name the platform commit the tool was built from in the commit
+message, and land the same tool on `dev`, `staging` and `main` (cherry-pick the one commit; never merge `dev` into
+`main`, `published/**` differs per branch). A schema change in the platform (a field added or
 retired) lands here together with the doc edit it requires, in one commit, so every commit validates.
 `tools/verify-envelope.mjs` is hand-written and dependency-free (node:crypto only).
 
@@ -143,8 +149,12 @@ node tools/config-tool.mjs keygen cfg-2027a   # prints { kid, privatePkcs8Pem, p
   `news_disabled` / `videos_disabled` (optional booleans, absent = `false`; platform decision D-25) are the per-feed
   kill switches: `true` hides the News or the Videos feed in the app while every other feed keeps working. Builds
   that predate them ignore the keys (the app decodes this doc with a keyed container).
+  `usgs_disabled` (optional boolean, absent = `false`, 2026-11-27) switches the USGS "Did You Feel It?" contribution
+  off in the app: no form after a report and no consent dialog. `usgs_submit` stays the gate for background
+  submission (the app submits only while a verified bundle says `true`); builds that predate `usgs_disabled` ignore it.
 - `ios-config.regions_db`: `{ version, url, size_bytes, sha256 }` of the offline region-tiles bundle (copy the
   values from `region-tiles/regions-db.json`; `size_bytes`/`sha256` are of the `.gz`, sha256 lowercase hex).
+- `ios-config.learn` (optional, 2026-11-27): the Learn pack pointer. See "The Learn pointer and its gate" below.
 - `ios-config.videos` (optional): the Videos tab's channel list. The app itself reads each channel's public YouTube
   RSS, so editing this changes every installed app's Videos list without a release.
   `{ channels: [{ id, title, lang, iconURL?, country? }], windowDays?, maxItems? }`: `id` is the `UC…` channel id (`UC` + 22
@@ -194,6 +204,59 @@ node tools/config-tool.mjs keygen cfg-2027a   # prints { kid, privatePkcs8Pem, p
   `false` while the app draws the overlay unconditionally: set it to `enabled: true, rollout: 100` before any build
   starts reading it. A new flag does nothing until a client that reads it ships.
 
+## The Learn pointer and its gate
+
+The Learn courses ship as one immutable JSON pack per release on the public data bucket, at
+`https://<data host>/v1/content/learn/<sha256>.json` (published by the platform's Learn lane, never by this repo).
+`docs/ios-config.json` points at it:
+
+```json
+"learn": {
+  "packs": [{ "schema": 1, "version": 12, "urls": ["https://data.theshelter.app/v1/content/learn/<sha256>.json"],
+              "size_bytes": 203114, "sha256": "<sha256>", "min_build": 950 }],
+  "course_floor": { "firstAidBasics": 13 }
+}
+```
+
+- `packs`: 1 to 4 entries. `schema` 1–99 is the pack format, `version` the pack version, `size_bytes` (at most
+  2,000,000) and `sha256` (lowercase hex) are of the decoded pack bytes, and `min_build` (optional) is the lowest
+  CFBundleVersion that may use the entry. The app takes the highest `schema` it supports whose `min_build` it meets.
+- `urls`: 1 to 3, each https, on `data.theshelter.app`, `data-staging.theshelter.app` or `data-dev.theshelter.app`,
+  with the path exactly `/v1/content/learn/<that entry's sha256>.json`, no query, no fragment, no port and no
+  duplicate. `validate` enforces this shape; the gate below also requires the env's OWN data host (dev:
+  `data-dev`, staging: `data-staging`, prod: `data.theshelter.app`).
+- `course_floor` (optional): course id (camelCase, `^[a-z][A-Za-z0-9]{1,63}$`) → the lowest pack version that may show
+  that course. Raising it hides a faulty course on every device within one config poll, from cached and bundled packs
+  alike, without a download; the course comes back once a pack at or above the floor is installed.
+- Each env's pointer lives on its own branch: `dev` and `staging` point at the review pack on their own bucket, `main`
+  at the prod pack. Copy the values from the Learn lane's output for that env.
+
+**Kill switch: remove `learn`.** A verified bundle without `learn` makes the app use only its bundled courses, delete
+its cached packs and send no content request (within about 20 minutes: the config poll plus the 300 s public copy).
+Rollback ladder, mildest first: raise one `course_floor`; point back to an earlier sha (pack keys are never deleted);
+remove `learn`; raise `kill-switches.min_supported_build.ios`.
+
+**The gate (`learn-gate` job).** On every push, before `publish` may sign:
+
+```sh
+node tools/config-tool.mjs learn-gate docs/ --env <dev|staging|prod> --published published/<env>/v1/ios-config.json [--summary <file>]
+```
+
+1. No `learn` in `docs/ios-config.json`: pass at once, offline. Removing `learn` therefore always passes.
+2. Always, offline: the pointer matches the schema and every URL is on the env's own data host.
+3. `learn` equal to the `learn` inside the signed mirror `published/<env>/v1/ios-config.json` (signature verified
+   against the embedded keyring; freshness not checked): pass, offline. Any error reading or verifying the mirror
+   counts as changed.
+4. Changed: every URL is fetched (up to 3 retries on network errors, 429 and 5xx) and the gate fails on a definite
+   mismatch: decoded length ≠ `size_bytes`, sha256 ≠ `sha256`, the pack's `schema` or `version` ≠ the entry's, any
+   other HTTP status (404 included), and on prod a pack whose `env` is not `prod` or a course whose `stage` is not
+   `released`. A data host that stays unreachable after the retries fails too: re-run the job, or remove `learn`.
+
+The job summary lists, per pack, each course's stage and its old and new `contentHash`, and a text diff of the changed
+fields against the previously published pack. It is informational: the prod reviewer reads it before approving the
+`publish` job; nothing in it fails the gate. Run the same command locally before opening a pull request that changes
+`learn`.
+
 ## Who reads each knob (CFG-8, as of 2026-10-06)
 
 **iOS** = the app (builds 437–581 and iOS main as of 2026-10-06; "≥ N" is the first build that reads it), **api** =
@@ -216,6 +279,7 @@ is in the platform spec `docs/tdd/specs/platform-ports-config.md` ("Who reads ea
 | ios-config · `reports.*` | informational (compiled in the app and the api); validate: `coarseningCellMeters` = 1000 |
 | ios-config · `tiles.*` | informational (superseded by `regions_db`) |
 | ios-config · `regions_db`, `videos` | iOS |
+| ios-config · `learn` (`packs[]`, `course_floor`) | iOS (builds with the Learn pack client); validate (URL shape); `learn-gate` (host, pack match) |
 | origins · `ladder`, `backoff` | informational (read only by the OriginLadder module, which the app does not use) |
 | origins · `directOrigins.enabled`, `.minIntervalSeconds`, `.jitterFraction` | iOS ≥ 532 |
 | origins · `directOrigins.providers` | informational (URLs are compiled); validate: each name is in the allowlist |
@@ -223,7 +287,7 @@ is in the platform spec `docs/tdd/specs/platform-ports-config.md` ("Who reads ea
 | features · `flags.*` | reserved (above) |
 | features · `auth.providers` | informational |
 | kill-switches · `feed_disabled` | iOS ≥ 532 (the authority) |
-| kill-switches · `news_disabled`, `videos_disabled`, `usgs_submit`, `min_supported_build.ios`, `notice` | iOS |
+| kill-switches · `news_disabled`, `videos_disabled`, `usgs_submit`, `usgs_disabled`, `min_supported_build.ios`, `notice` | iOS |
 | kill-switches · `community_write_mode` | iOS and api (the server write gate) |
 | kill-switches · `direct_origins_provider_allowlist` | iOS ≥ 532; validate |
 | kill-switches · `min_supported_build.watchos` | informational (the Watch app reads no config) |
