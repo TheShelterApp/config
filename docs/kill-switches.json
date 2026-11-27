@@ -3,7 +3,7 @@
   "news_disabled": false,
   "videos_disabled": false,
   "community_write_mode": "normal",
-  "usgs_submit": true,
+  "usgs_submit": false,
   "live_activities": true,
   "push_alerts": true,
   "direct_origins_provider_allowlist": [
